@@ -103,3 +103,9 @@ REG_OPER_TIME_HOT_WATER = "REG_OPER_TIME_HOT_WATER"
 ###############################################################################
 
 DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S"
+
+###############################################################################
+# Only available if you Online login has 
+###############################################################################
+REG_SER_HOT_WATER_START = "REG_SER_HOT_WATER_START" 
+
