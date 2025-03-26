@@ -717,13 +717,14 @@ class ThermiaHeatPump:
         )
    
     
-    ### 
+    ####################################################### 
     # Only available if you have the installer type login - Francis 26/03/2025
-    ###
+    #######################################################
     @property
     def start_hotwater_temperature(self):
         return get_dict_value_or_none(
-            self.__get_temperature_data_by_register_name(REG_SER_HOT_WATER_START),
+            self.get_register_data_by_register_group_and_name("REG_GROUP_HOT_WATER","REG_SER_HOT_WATER_START"),
+            #self.__get_temperature_data_by_register_name(REG_SER_HOT_WATER_START),
             "value",
         )
 
