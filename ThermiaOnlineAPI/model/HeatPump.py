@@ -35,6 +35,7 @@ from ThermiaOnlineAPI.const import (
     REG_SUPPLY_LINE,
     DATETIME_FORMAT,
     REG_OPER_DATA_BUFFER_TANK,
+    REG_SER_HOT_WATER_START,
 )
 
 from ..utils.utils import get_dict_value_or_none, get_dict_value_or_default
@@ -712,6 +713,17 @@ class ThermiaHeatPump:
     def cooling_supply_line_temperature(self):
         return get_dict_value_or_none(
             self.__get_temperature_data_by_register_name(REG_COOL_SENSOR_SUPPLY),
+            "value",
+        )
+   
+    
+    ### 
+    # Only available if you have the installer type login - Francis 26/03/2025
+    ###
+    @property
+    def start_hotwater_temperature(self):
+        return get_dict_value_or_none(
+            self.__get_temperature_data_by_register_name(REG_SER_HOT_WATER_START),
             "value",
         )
 
