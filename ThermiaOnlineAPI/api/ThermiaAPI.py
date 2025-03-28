@@ -366,6 +366,10 @@ class ThermiaAPI:
             "registerValue": int(register_value),
         }
 
+    ## Francis 
+    def get_group_hot_water_installer (self, device: ThermiaHeatPump):
+        return self.__get_register_group(device.id, REG_GROUP_HOT_WATER)
+
     def get_group_hot_water(self, device: ThermiaHeatPump) -> Dict[str, Optional[int]]:
         register_data: list = self.__get_register_group(device.id, REG_GROUP_HOT_WATER)
 
@@ -756,3 +760,4 @@ class ThermiaAPI:
         ):
             _LOGGER.info("Token expired, re-authenticating.")
             self.authenticated = self.__authenticate()
+
