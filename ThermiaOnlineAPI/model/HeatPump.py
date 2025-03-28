@@ -74,6 +74,8 @@ class ThermiaHeatPump:
         self.__group_operational_time = None
         self.__group_operational_operation = None
         self.__group_operational_operation_read_only = None
+        # added by Francis 28-3-2026 and is used if you are using an installer login 
+        self.__group_hot_water_installer = None 
         self.__group_hot_water: Dict[str, Optional[int]] = {
             "hot_water_switch": None,
             "hot_water_boost_switch": None,
@@ -121,6 +123,9 @@ class ThermiaHeatPump:
             self.__api_interface.get_group_operational_operation_from_status(self)
         )
         self.__group_hot_water = self.__api_interface.get_group_hot_water(self)
+        
+        ## Only available for installer - Francis 28-3-2026 
+        self.__group_hot_water_installer = self.__api_interface.get_group_hot_water_installer(self) 
 
         self.__alarms = self.__api_interface.get_all_alarms(self.__device_id)
 
@@ -295,6 +300,17 @@ class ThermiaHeatPump:
 
         return self.__get_data_from_group_by_register_name(
             self.__group_temperatures, register_name
+        )
+
+    ### Francis 
+    def __get_hot_water_installer_data_by_register_name(
+        self, register_name: str  # TEMPERATURE_REGISTERS
+    ):
+        if self.__group_hot_water_installer is None:
+            return None
+
+        return self.__get_data_from_group_by_register_name(
+            self.__group_hot_water_installer, register_name
         )
 
     def __get_operational_time_data_by_register_name(
@@ -723,8 +739,7 @@ class ThermiaHeatPump:
     @property
     def start_hotwater_temperature(self):
         return get_dict_value_or_none(
-            self.get_register_data_by_register_group_and_name("REG_GROUP_HOT_WATER","REG_SER_HOT_WATER_START"),
-            #self.__get_temperature_data_by_register_name(REG_SER_HOT_WATER_START),
+            self.__get_hot_water_installer_data_by_register_name(REG_SER_HOT_WATER_START),
             "value",
         )
 
