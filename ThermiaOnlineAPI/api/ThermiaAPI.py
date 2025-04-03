@@ -366,7 +366,7 @@ class ThermiaAPI:
             "registerValue": int(register_value),
         }
 
-    ## Francis 
+    ## Francis update 03/04/2025
     def get_group_hot_water_installer (self, device: ThermiaHeatPump):
         return self.__get_register_group(device.id, REG_GROUP_HOT_WATER)
 
@@ -397,6 +397,21 @@ class ThermiaAPI:
 
     def set_temperature(self, device: ThermiaHeatPump, temperature):
         device_temperature_register_index = device.get_register_indexes()["temperature"]
+        if device_temperature_register_index is None:
+            _LOGGER.error(
+                "Error setting device's temperature. No temperature register index."
+            )
+            return
+
+        self.__set_register_value(
+            device, device_temperature_register_index, temperature
+        )
+
+    ## Francis updated 03/04/2025 
+        def set_hot_water_start_temperature(self, device: ThermiaHeatPump, temperature):
+        #     get_hot_water_installer_data_by_register_name()["
+        # Hardcoding for the second to see how it works 
+        device_temperature_register_index = 1075 
         if device_temperature_register_index is None:
             _LOGGER.error(
                 "Error setting device's temperature. No temperature register index."
