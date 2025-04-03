@@ -156,6 +156,11 @@ class ThermiaHeatPump:
     def set_register_index_hot_water_boost_switch(self, register_index: Optional[int]):
         self.__register_indexes["hot_water_boost_switch"] = register_index
 
+    ### Francis Update to set hot water start 03/04/2025
+    def set_hot_water_start_temperature(self, temperature: int):
+        self.__api_interface.set_hot_water_start_temperature(self, temperature)
+        self.update_data()
+    
     def set_temperature(self, temperature: int):
         if self.__status is None:
             self._LOGGER.error("Status not available, cannot set temperature")
