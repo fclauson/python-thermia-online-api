@@ -1047,3 +1047,4 @@ class ThermiaHeatPump:
         debug_str += "########## DEBUG END ##########\n"
 
         return debug_str
+
