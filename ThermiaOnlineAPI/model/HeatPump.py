@@ -742,7 +742,7 @@ class ThermiaHeatPump:
     # Only available if you have the installer type login - Francis 26/03/2025
     #######################################################
     @property
-    def start_hotwater_temperature(self):
+    def start_hot_water_temperature(self):
         return get_dict_value_or_none(
             self.__get_hot_water_installer_data_by_register_name(REG_SER_HOT_WATER_START),
             "value",
