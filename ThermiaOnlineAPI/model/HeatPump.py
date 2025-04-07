@@ -634,7 +634,7 @@ class ThermiaHeatPump:
         ) or get_dict_value_or_none(self.__status, "isHotWaterActive")
 
     @property
-    def xhot_water_temperature(self):
+    def hot_water_temperature(self):
         return get_dict_value_or_none(self.__status, "hotWaterTemperature")
 
     ###########################################################################
