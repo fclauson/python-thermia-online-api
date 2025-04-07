@@ -135,7 +135,7 @@ class ThermiaAPI:
 
         url = (
             self.configuration["apiBaseUrl"]
-            + "/api/v1/installationstatus/"
+            + "/xapi/v1/installationstatus/"
             + device_id
             + "/status"
         )
