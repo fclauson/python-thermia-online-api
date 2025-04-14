@@ -74,8 +74,10 @@ class ThermiaHeatPump:
         self.__group_operational_time = None
         self.__group_operational_operation = None
         self.__group_operational_operation_read_only = None
+        
         # added by Francis 28-3-2026 and is used if you are using an installer login 
         self.__group_hot_water_installer = None 
+        
         self.__group_hot_water: Dict[str, Optional[int]] = {
             "hot_water_switch": None,
             "hot_water_boost_switch": None,
@@ -124,7 +126,7 @@ class ThermiaHeatPump:
         )
         self.__group_hot_water = self.__api_interface.get_group_hot_water(self)
         
-        ## Only available for installer - Francis 28-3-2026 
+        # Francis -Only available for installer - Francis 28-3-2026 
         self.__group_hot_water_installer = self.__api_interface.get_group_hot_water_installer(self) 
 
         self.__alarms = self.__api_interface.get_all_alarms(self.__device_id)
@@ -156,7 +158,7 @@ class ThermiaHeatPump:
     def set_register_index_hot_water_boost_switch(self, register_index: Optional[int]):
         self.__register_indexes["hot_water_boost_switch"] = register_index
 
-    ### Francis Update to set hot water start 03/04/2025
+    # Francis Update to set hot water start 03/04/2025
     def set_hot_water_start_temperature(self, temperature: int):
         self.__api_interface.set_hot_water_start_temperature(self, temperature)
         self.update_data()
@@ -307,7 +309,7 @@ class ThermiaHeatPump:
             self.__group_temperatures, register_name
         )
 
-    ### Francis 
+    # Francis get registers only available to installers  14-04-2025 
     def __get_hot_water_installer_data_by_register_name(
         self, register_name: str  # TEMPERATURE_REGISTERS
     ):
@@ -647,15 +649,15 @@ class ThermiaHeatPump:
 
     @property
     def heat_min_temperature_value(self):
-        return get_dict_value_or_none(self.__get_heat_temperature_data(), "minValue")
+        return get_dict_value_or_none(self.___temperature_data(), "minValue")
 
     @property
     def heat_max_temperature_value(self):
-        return get_dict_value_or_none(self.__get_heat_temperature_data(), "maxValue")
+        return get_dict_value_or_none(self.___temperature_data(), "maxValue")
 
     @property
     def heat_temperature_step(self):
-        return get_dict_value_or_none(self.__get_heat_temperature_data(), "step")
+        return get_dict_value_or_none(self.___temperature_data(), "step")
 
     ###########################################################################
     # Other temperature data
