@@ -625,15 +625,15 @@ class ThermiaHeatPump:
 
     @property
     def heat_min_temperature_value(self):
-        return get_dict_value_or_none(self.__get_heat_temperature_data(), "minValue")
+        return get_dict_value_or_none(self.___temperature_data, "minValue")
 
     @property
-    def heat_max_temperature_value(self):
-        return get_dict_value_or_none(self.__get_heat_temperature_data(), "maxValue")
+     def heat_max_temperature_value(self):
+        return get_dict_value_or_none(self.___temperature_data(), "maxValue")
 
     @property
     def heat_temperature_step(self):
-        return get_dict_value_or_none(self.__get_heat_temperature_data(), "step")
+        return get_dict_value_or_none(self.___temperature_data(), "step")
 
     ###########################################################################
     # Other temperature data
