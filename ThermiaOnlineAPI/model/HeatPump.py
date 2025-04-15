@@ -742,8 +742,8 @@ class ThermiaHeatPump:
             "value",
         )
 
-   # Added by Francis to expose more details of hot water 
-   @property
+    # Added by Francis to expose more details of hot water - the lower temp and the weighted temp 
+    @property
     def lower_hot_water_temperature(self):
         return get_dict_value_or_none(
             self.__get_temperature_data_by_register_name(REG_OPER_DATA_HOT_WATER),
