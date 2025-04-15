@@ -160,7 +160,7 @@ class ThermiaHeatPump:
 
     # Francis Update to set hot water start 03/04/2025
     def set_hot_water_start_temperature(self, temperature: int):
-        self._LOGGER.debug("set_hot_water_start_temperature : %s", temperature)
+        self._LOGGER.info("set_hot_water_start_temperature : %s", temperature)
         self.__api_interface.set_hot_water_start_temperature(self, temperature)
         self.update_data()
     
