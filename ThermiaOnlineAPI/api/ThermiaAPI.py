@@ -518,7 +518,8 @@ class ThermiaAPI:
         self, device: ThermiaHeatPump, register_index: int, register_value: int
     ):
         self.__check_token_validity()
-        _LOGGER.debug("set_register_value : device.id=%s, target_temp=%s, register_index=%s, register_value=%s", device.id, target_temp, register_index, register_value)
+        # Francis added debug 
+        _LOGGER.debug("set_register_value : device.id=%s, register_index=%s, register_value=%s", device.id,  register_index, register_value)
         url = (
             self.configuration["apiBaseUrl"]
             + THERMIA_INSTALLATION_PATH
