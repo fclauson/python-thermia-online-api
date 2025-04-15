@@ -368,7 +368,7 @@ class ThermiaAPI:
 
     ## Francis update 03/04/2025
     def get_group_hot_water_installer (self, device: ThermiaHeatPump):
-        _LOGGER.info("get_group_hot_water_installer") 
+        # _LOGGER.info("get_group_hot_water_installer") 
         return self.__get_register_group(device.id, REG_GROUP_HOT_WATER)
 
     def get_group_hot_water(self, device: ThermiaHeatPump) -> Dict[str, Optional[int]]:
