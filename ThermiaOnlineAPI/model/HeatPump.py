@@ -36,6 +36,8 @@ from ThermiaOnlineAPI.const import (
     DATETIME_FORMAT,
     REG_OPER_DATA_BUFFER_TANK,
     REG_SER_HOT_WATER_START,
+    REG_OPER_DATA_HOT_WATER,
+    REG_WEIGHTED_HOT_WATER_TEMP
 )
 
 from ..utils.utils import get_dict_value_or_none, get_dict_value_or_default
@@ -739,7 +741,20 @@ class ThermiaHeatPump:
             self.__get_temperature_data_by_register_name(REG_COOL_SENSOR_SUPPLY),
             "value",
         )
-   
+
+   # Added by Francis to expose more details of hot water 
+   @property
+    def lower_hot_water_temperature(self):
+        return get_dict_value_or_none(
+            self.__get_temperature_data_by_register_name(REG_OPER_DATA_HOT_WATER),
+            "value",
+        )
+    @property
+    def weighted_hot_water_temperature(self):
+        return get_dict_value_or_none(
+            self.__get_temperature_data_by_register_name(REG_WEIGHTED_HOT_WATER_TEMP),
+            "value",
+        )
     
     ####################################################### 
     # Only available if you have the installer type login - Francis 26/03/2025
