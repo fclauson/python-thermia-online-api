@@ -418,9 +418,9 @@ class ThermiaAPI:
                 "Error setting device's temperature. No temperature register index."
             )
             return
-            self.__set_register_value(
-                device, device_temperature_register_index, temperature
-            )
+        self.__set_register_value(
+            device, device_temperature_register_index, temperature
+        )
 
     def set_operation_mode(self, device: ThermiaHeatPump, mode):
         if device.is_operation_mode_read_only:
