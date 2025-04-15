@@ -412,7 +412,7 @@ class ThermiaAPI:
     def set_hot_water_start_temperature(self, device: ThermiaHeatPump, temperature):
         # Hardcoding for the second to see how it works 
         _LOGGER.info("set_hot_water_start_temp : %s",temperature)
-        device_temperature_register_index = 107058 
+        device_temperature_register_index = 107061 
         if device_temperature_register_index is None:
             _LOGGER.error(
                 "Error setting device's temperature. No temperature register index."
