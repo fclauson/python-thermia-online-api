@@ -368,6 +368,7 @@ class ThermiaAPI:
 
     ## Francis update 03/04/2025
     def get_group_hot_water_installer (self, device: ThermiaHeatPump):
+        _LOGGER.debug("get_group_hot_water_installer") 
         return self.__get_register_group(device.id, REG_GROUP_HOT_WATER)
 
     def get_group_hot_water(self, device: ThermiaHeatPump) -> Dict[str, Optional[int]]:
@@ -409,8 +410,8 @@ class ThermiaAPI:
 
     ## Francis updated 03/04/2025 
     def set_hot_water_start_temperature(self, device: ThermiaHeatPump, temperature):
-        # get_hot_water_installer_data_by_register_name()["
         # Hardcoding for the second to see how it works 
+        _LOGGER.debug("set_hot_water_start_temp : %s",temperature)
         device_temperature_register_index = 107058 
         if device_temperature_register_index is None:
             _LOGGER.error(
@@ -517,7 +518,7 @@ class ThermiaAPI:
         self, device: ThermiaHeatPump, register_index: int, register_value: int
     ):
         self.__check_token_validity()
-
+        _LOGGER.debug("set_register_value : device.id=%s, target_temp=%s, register_index=%s, register_value=%s", device.id, target_temp, register_index, register_value)
         url = (
             self.configuration["apiBaseUrl"]
             + THERMIA_INSTALLATION_PATH
