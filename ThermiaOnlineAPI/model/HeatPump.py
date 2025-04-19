@@ -787,31 +787,31 @@ class ThermiaHeatPump:
     @property
     def evaporator_pressure(self): 
         return get_dict_value_or_none( 
-            self.__get_hp_diagnosticsinstaller_data_by_register_name (REG_EXV_EVAP_PRESS_MA_SA),
+            self.__get_hp_diagnostics_data_by_register_name (REG_EXV_EVAP_PRESS_MA_SA),
             "value", 
         )
     @property
     def suction_temp(self): 
         return get_dict_value_or_none( 
-            self.__get_hp_diagnosticsinstaller_data_by_register_name (REG_EXV_DATA_SUCTION_TEMP_MA_SA),
+            self.__get_hp_diagnostics_data_by_register_name (REG_EXV_DATA_SUCTION_TEMP_MA_SA),
             "value", 
         )
     @property
     def evaporator_temp(self): 
         return get_dict_value_or_none( 
-            self.__get_hp_diagnosticsinstaller_data_by_register_name (REG_OPER_DATA_EVAP_TEMP_MA_SA),
+            self.__get_hp_diagnostics_data_by_register_name (REG_OPER_DATA_EVAP_TEMP_MA_SA),
             "value" ,
         )
     @property
     def super_heat(self): 
         return get_dict_value_or_none( 
-            self.__get_hp_diagnosticsinstaller_data_by_register_name (REG_EXV_SUPER_HEAT_MA_SA),
+            self.__get_hp_diagnostics_data_by_register_name (REG_EXV_SUPER_HEAT_MA_SA),
             "value" ,
         )
     @property
     def opening_degree(self): 
         return get_dict_value_or_none( 
-            self.__get_hp_diagnosticsinstaller_data_by_register_name (REG_EXV_OPEN_DEG_MA_SA),
+            self.__get_hp_diagnostics_data_by_register_name (REG_EXV_OPEN_DEG_MA_SA),
             "value", 
         )
 
