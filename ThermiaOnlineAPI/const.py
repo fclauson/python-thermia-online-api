@@ -111,6 +111,17 @@ DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S"
 ###############################################################################
 # Only available if you Online login has - Francis 26/03/2025
 ###############################################################################
-REG_SER_HOT_WATER_START = "REG_SER_HOT_WATER_START" 
-REG_GROUP_OPERATIONAL_DIA = "REG_GROUP_OPERATIONAL_DIA"
+
+# registers for setting the start temp 
+REG_SER_HOT_WATER_START = "REG_SER_HOT_WATER_START"
+
+# group for diagnostics
+REG_GROUP_OPERATIONAL_DIAGNOSTICS = "REG_GROUP_OPERATIONAL_DIAGNOSTICS"
+
+#register for diagnostics
+REG_EXV_EVAP_PRESS_MA_SA = "REG_EXV_EVAP_PRESS_MA_SA"
+REG_EXV_DATA_SUCTION_TEMP_MA_SA = "REG_EXV_DATA_SUCTION_TEMP_MA_SA"
+REG_OPER_DATA_EVAP_TEMP_MA_SA = "REG_OPER_DATA_EVAP_TEMP_MA_SA"
+REG_EXV_SUPER_HEAT_MA_SA = "REG_EXV_SUPER_HEAT_MA_SA"
+REG_EXV_OPEN_DEG_MA_SA = "REG_EXV_OPEN_DEG_MA_SA"
 
