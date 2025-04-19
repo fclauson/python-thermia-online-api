@@ -112,4 +112,5 @@ DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S"
 # Only available if you Online login has - Francis 26/03/2025
 ###############################################################################
 REG_SER_HOT_WATER_START = "REG_SER_HOT_WATER_START" 
+REG_GROUP_OPERATIONAL_DIA = "REG_GROUP_OPERATIONAL_DIA"
 
