@@ -37,7 +37,8 @@ from ThermiaOnlineAPI.const import (
     REG_OPER_DATA_BUFFER_TANK,
     REG_SER_HOT_WATER_START,
     REG_OPER_DATA_HOT_WATER,
-    REG_WEIGHTED_HOT_WATER_TEMP
+    REG_WEIGHTED_HOT_WATER_TEMP,
+    REG_GROUP_OPERATIONAL_DIA
 )
 
 from ..utils.utils import get_dict_value_or_none, get_dict_value_or_default
@@ -79,6 +80,7 @@ class ThermiaHeatPump:
         
         # added by Francis 28-3-2026 and is used if you are using an installer login 
         self.__group_hot_water_installer = None 
+        self.__group_hp_diagnostics = None
         
         self.__group_hot_water: Dict[str, Optional[int]] = {
             "hot_water_switch": None,
@@ -90,7 +92,7 @@ class ThermiaHeatPump:
 
         self.__register_indexes = DEFAULT_REGISTER_INDEXES
 
-        # Precalculated data so it does not have to be updated
+        # Precalculated data so it does not have to be updated - these fields are cacluated on each update and then can be used elsewhere 
 
         self.__operational_statuses = None
         self.__all_operational_statuses_map = None
@@ -130,6 +132,7 @@ class ThermiaHeatPump:
         
         # Francis -Only available for installer - Francis 28-3-2026 
         self.__group_hot_water_installer = self.__api_interface.get_group_hot_water_installer(self) 
+        self.__group_hp_diagnsotics = self.__api_internface.get_hp_diagnostics (self) 
 
         self.__alarms = self.__api_interface.get_all_alarms(self.__device_id)
 
