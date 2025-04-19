@@ -323,7 +323,7 @@ class ThermiaHeatPump:
     # Francis get registers only available to installers  14-04-2025 - both installer and diagnostics 
     
     def __get_hot_water_installer_data_by_register_name(
-        self, register_name: str  # TEMPERATURE_REGISTERS
+        self, register_name: str 
     ):
         if self.__group_hot_water_installer is None:
             return None
@@ -332,13 +332,13 @@ class ThermiaHeatPump:
             self.__group_hot_water_installer, register_name
         )
     def __get_hp_diagnostics_data_by_register_name(
-        self, register_name: str  # TEMPERATURE_REGISTERS
+        self, register_name: str  
     ):
-        if self.__get_hp_diagnostics is None:
+        if self.__api_interface.get_hp_diagnostics is None:
             return None
 
         return self.__get_data_from_group_by_register_name(
-            self.__get_hp_diagnostics, register_name
+            self.__api_interface.get_hp_diagnostics, register_name
         )
 
     def __get_operational_time_data_by_register_name(
