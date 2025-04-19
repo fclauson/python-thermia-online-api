@@ -338,7 +338,7 @@ class ThermiaHeatPump:
             return None
 
         return self.__get_data_from_group_by_register_name(
-            self.__api_interface.get_hp_diagnostics, register_name
+            self.__group_hp_diagnostics, register_name
         )
 
     def __get_operational_time_data_by_register_name(
