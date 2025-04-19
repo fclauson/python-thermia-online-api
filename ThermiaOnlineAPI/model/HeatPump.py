@@ -38,7 +38,7 @@ from ThermiaOnlineAPI.const import (
     REG_SER_HOT_WATER_START,
     REG_OPER_DATA_HOT_WATER,
     REG_WEIGHTED_HOT_WATER_TEMP,
-    REG_GROUP_OPERATIONAL_DIA
+    REG_GROUP_OPERATIONAL_DIAGNOSTICS
 )
 
 from ..utils.utils import get_dict_value_or_none, get_dict_value_or_default
@@ -132,7 +132,7 @@ class ThermiaHeatPump:
         
         # Francis -Only available for installer - Francis 28-3-2026 
         self.__group_hot_water_installer = self.__api_interface.get_group_hot_water_installer(self) 
-        self.__group_hp_diagnsotics = self.__api_internface.get_hp_diagnostics (self) 
+        self.__group_hp_diagnsotics = self.__api_interface.get_hp_diagnostics (self) 
 
         self.__alarms = self.__api_interface.get_all_alarms(self.__device_id)
 
@@ -315,7 +315,8 @@ class ThermiaHeatPump:
             self.__group_temperatures, register_name
         )
 
-    # Francis get registers only available to installers  14-04-2025 
+    # Francis get registers only available to installers  14-04-2025 - both installer and diagnostics 
+    
     def __get_hot_water_installer_data_by_register_name(
         self, register_name: str  # TEMPERATURE_REGISTERS
     ):
@@ -324,6 +325,15 @@ class ThermiaHeatPump:
 
         return self.__get_data_from_group_by_register_name(
             self.__group_hot_water_installer, register_name
+        )
+    def __get_hp_diagnostics_data_by_register_name(
+        self, register_name: str  # TEMPERATURE_REGISTERS
+    ):
+        if self.__get_hp_diagnostics is None:
+            return None
+
+        return self.__get_data_from_group_by_register_name(
+            self.__get_hp_diagnostics, register_name
         )
 
     def __get_operational_time_data_by_register_name(
@@ -768,6 +778,29 @@ class ThermiaHeatPump:
             self.__get_hot_water_installer_data_by_register_name(REG_SER_HOT_WATER_START),
             "value",
         )
+
+    @property
+    def evaporator_pressure (self): 
+        return (get_dict_value_or_none( 
+            self.__get_hp_diagnostics(Evaporator pressure [bar]
+7.40
+Last modified 2025-04-19
+Suction temperature [°C]
+23.80
+Last modified 2025-04-19
+Evaporation temperature [°C]
+14.50
+Last modified 2025-04-19
+Super heat [K]
+9.30
+Last modified 2025-04-19
+Opening degree EXV[%]
+0
+
+
+
+
+    
 
     ###########################################################################
     # Operational status (REG_GROUP_OPERATIONAL_STATUS)
