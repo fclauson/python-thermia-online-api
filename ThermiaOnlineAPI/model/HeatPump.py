@@ -38,7 +38,12 @@ from ThermiaOnlineAPI.const import (
     REG_SER_HOT_WATER_START,
     REG_OPER_DATA_HOT_WATER,
     REG_WEIGHTED_HOT_WATER_TEMP,
-    REG_GROUP_OPERATIONAL_DIAGNOSTICS
+    REG_GROUP_OPERATIONAL_DIAGNOSTICS,
+    REG_EXV_EVAP_PRESS_MA_SA,
+    REG_EXV_DATA_SUCTION_TEMP_MA_SA,
+    REG_OPER_DATA_EVAP_TEMP_MA_SA,
+    REG_EXV_SUPER_HEAT_MA_SA,
+    REG_EXV_OPEN_DEG_MA_SA
 )
 
 from ..utils.utils import get_dict_value_or_none, get_dict_value_or_default
@@ -782,25 +787,33 @@ class ThermiaHeatPump:
     @property
     def evaporator_pressure (self): 
         return (get_dict_value_or_none( 
-            self.__get_hp_diagnostics(Evaporator pressure [bar]
-7.40
-Last modified 2025-04-19
-Suction temperature [°C]
-23.80
-Last modified 2025-04-19
-Evaporation temperature [°C]
-14.50
-Last modified 2025-04-19
-Super heat [K]
-9.30
-Last modified 2025-04-19
-Opening degree EXV[%]
-0
-
-
-
-
-    
+            self.__get_hp_diagnosticsinstaller_data_by_register_name (REG_EXV_EVAP_PRESS_MA_SA),
+            "value" 
+        )
+    @property
+    def evaporator_pressure (self): 
+        return (get_dict_value_or_none( 
+            self.__get_hp_diagnosticsinstaller_data_by_register_name (REG_EXV_DATA_SUCTION_TEMP_MA_SA),
+            "value" 
+        )
+    @property
+    def evaporator_pressure (self): 
+        return (get_dict_value_or_none( 
+            self.__get_hp_diagnosticsinstaller_data_by_register_name (REG_OPER_DATA_EVAP_TEMP_MA_SA),
+            "value" 
+        )
+    @property
+    def evaporator_pressure (self): 
+        return (get_dict_value_or_none( 
+            self.__get_hp_diagnosticsinstaller_data_by_register_name (REG_EXV_SUPER_HEAT_MA_SA),
+            "value" 
+        )
+    @property
+    def evaporator_pressure (self): 
+        return (get_dict_value_or_none( 
+            self.__get_hp_diagnosticsinstaller_data_by_register_name (REG_EXV_OPEN_DEG_MA_SA),
+            "value" 
+        )
 
     ###########################################################################
     # Operational status (REG_GROUP_OPERATIONAL_STATUS)
