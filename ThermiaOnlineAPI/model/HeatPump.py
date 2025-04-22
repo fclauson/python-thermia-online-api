@@ -86,6 +86,7 @@ class ThermiaHeatPump:
         # added by Francis 28-3-2026 and is used if you are using an installer login 
         self.__group_hot_water_installer = None 
         self.__group_hp_diagnostics = None
+        self.__group_heating_curve = None 
         
         self.__group_hot_water: Dict[str, Optional[int]] = {
             "hot_water_switch": None,
@@ -138,6 +139,7 @@ class ThermiaHeatPump:
         # Francis -Only available for installer - Francis 28-3-2026 
         self.__group_hot_water_installer = self.__api_interface.get_group_hot_water_installer(self) 
         self.__group_hp_diagnostics = self.__api_interface.get_hp_diagnostics (self) 
+        self.__group_heating_curve = self.__api_interface.heating_curve (self) 
 
         self.__alarms = self.__api_interface.get_all_alarms(self.__device_id)
 
@@ -340,7 +342,15 @@ class ThermiaHeatPump:
         return self.__get_data_from_group_by_register_name(
             self.__group_hp_diagnostics, register_name
         )
+    def __get_heating_curve_data_by_register_name(
+        self, register_name: str  
+    ):
+        if self.__api_interface.get_heating_curve is None:
+            return None
 
+        return self.__get_data_from_group_by_register_name(
+            self.__group_heating_curve, register_name
+        )
     def __get_operational_time_data_by_register_name(
         self, register_name: str  # OPERATIONAL_TIME_REGISTERS
     ):
