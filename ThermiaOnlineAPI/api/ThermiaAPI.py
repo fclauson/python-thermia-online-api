@@ -379,7 +379,7 @@ class ThermiaAPI:
         return self.__get_register_group(device.id, REG_GROUP_OPERATIONAL_DIAGNOSTICS )
 
     def get_heating_curve (self, device: ThermiaHeatPump):
-        return self.__get_register_group(device.id, REG_GROUP_HEATING_CURVES )
+        return self.__get_register_group(device.id, REG_GROUP_HEATING_CURVE )
 
 
     def get_group_hot_water(self, device: ThermiaHeatPump) -> Dict[str, Optional[int]]:
