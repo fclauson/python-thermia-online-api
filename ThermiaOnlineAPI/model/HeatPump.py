@@ -140,7 +140,7 @@ class ThermiaHeatPump:
         # Francis -Only available for installer - Francis 28-3-2026 
         self.__group_hot_water_installer = self.__api_interface.get_group_hot_water_installer(self) 
         self.__group_hp_diagnostics = self.__api_interface.get_hp_diagnostics (self) 
-        self.__group_heating_curve = self.__api_interface.heating_curve (self) 
+        self.__group_heating_curve = self.__api_interface.get_heating_curve (self) 
 
         self.__alarms = self.__api_interface.get_all_alarms(self.__device_id)
 
