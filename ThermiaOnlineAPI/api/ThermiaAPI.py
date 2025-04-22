@@ -8,7 +8,8 @@ import json
 import hashlib
 from typing import Dict, Optional
 
-# Framcis - added Operation diagnostics
+# Framcis - added Operation diagnostics and heatcurve
+
 from ThermiaOnlineAPI.const import (
     REG_GROUP_HOT_WATER,
     REG_GROUP_OPERATIONAL_OPERATION,
@@ -19,6 +20,7 @@ from ThermiaOnlineAPI.const import (
     REG__HOT_WATER_BOOST,
     REG_OPERATIONMODE,
     REG_GROUP_OPERATIONAL_DIAGNOSTICS,
+    REG_GROUP_HEATING_CURVE, 
     THERMIA_CONFIG_URL,
     THERMIA_AZURE_AUTH_URL,
     THERMIA_AZURE_AUTH_CLIENT_ID_AND_SCOPE,
@@ -375,6 +377,10 @@ class ThermiaAPI:
     
     def get_hp_diagnostics (self, device: ThermiaHeatPump):
         return self.__get_register_group(device.id, REG_GROUP_OPERATIONAL_DIAGNOSTICS )
+
+    def get_heating_curve (self, device: ThermiaHeatPump):
+        return self.__get_register_group(device.id, REG_GROUP_HEATING_CURVES )
+
 
     def get_group_hot_water(self, device: ThermiaHeatPump) -> Dict[str, Optional[int]]:
         register_data: list = self.__get_register_group(device.id, REG_GROUP_HOT_WATER)
