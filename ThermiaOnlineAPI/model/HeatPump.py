@@ -832,51 +832,51 @@ class ThermiaHeatPump:
     ##############################################
     
     @property
-    def REG_HEATING_HEAT_CURVE(self): 
+    def HC_REG_HEATING_HEAT_CURVE(self): 
         return get_dict_value_or_none( 
             self.__get_hp_diagnostics_data_by_register_name (REG_HEATING_HEAT_CURVE),
             "value", 
         )
     @property
-    def REG_HEATING_HEAT_CURVE_MIN(self): 
+    def HC_REG_HEATING_HEAT_CURVE_MIN(self): 
         return get_dict_value_or_none( 
             self.__get_hp_diagnostics_data_by_register_name (REG_HEATING_HEAT_CURVE_MIN),
             "value", 
         )
     @property
-    def REG_HEATING_HEAT_CURVE_MAX(self): 
+    def HC_REG_HEATING_HEAT_CURVE_MAX(self): 
         return get_dict_value_or_none( 
             self.__get_hp_diagnostics_data_by_register_name (REG_HEATING_HEAT_CURVE_MAX),
             "value", 
         )
         
     @property
-    def REG_HEATING_CURVE_PLUS5(self): 
+    def HC_REG_HEATING_CURVE_PLUS5(self): 
         return get_dict_value_or_none( 
             self.__get_hp_diagnostics_data_by_register_name (REG_HEATING_CURVE_PLUS5),
             "value", 
         )
 
     @property
-    def REG_HEATING_CURVE_0(self): 
+    def HC_REG_HEATING_CURVE_0(self): 
         return get_dict_value_or_none( 
             self.__get_hp_diagnostics_data_by_register_name (REG_HEATING_CURVE_0),
             "value", 
         )
     @property
-    def REG_HEATING_CURVE_MINUS5(self): 
+    def HC_REG_HEATING_CURVE_MINUS5(self): 
         return get_dict_value_or_none( 
             self.__get_hp_diagnostics_data_by_register_name (REG_HEATING_CURVE_MINUS5),
             "value", 
         )
     @property
-    def REG_HEATING_HEAT_STOP(self): 
+    def HC_REG_HEATING_HEAT_STOP(self): 
         return get_dict_value_or_none( 
             self.__get_hp_diagnostics_data_by_register_name (REG_HEATING_HEAT_STOP),
             "value", 
         )
     @property
-    def REG_HEATING_ROOM_FACTOR(self): 
+    def HC_REG_HEATING_ROOM_FACTOR(self): 
         return get_dict_value_or_none( 
             self.__get_hp_diagnostics_data_by_register_name (REG_HEATING_ROOM_FACTOR),
             "value", 
