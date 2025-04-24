@@ -55,6 +55,7 @@ from ThermiaOnlineAPI.const import (
     REG_HEATING_CURVE_MINUS5,
     REG_HEATING_HEAT_STOP,
     REG_HEATING_ROOM_FACTOR
+
 )
 
 from ..utils.utils import get_dict_value_or_none, get_dict_value_or_default
@@ -843,52 +844,53 @@ class ThermiaHeatPump:
     
     @property
     def HC_REG_HEATING_HEAT_CURVE(self): 
+        self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
-            self.__get_hp_diagnostics_data_by_register_name (REG_HEATING_HEAT_CURVE),
+            self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_CURVE),
             "value", 
         )
     @property
     def HC_REG_HEATING_HEAT_CURVE_MIN(self): 
         return get_dict_value_or_none( 
-            self.__get_hp_diagnostics_data_by_register_name (REG_HEATING_HEAT_CURVE_MIN),
+            self.__get_heating_curve_data_by_register_name (REG_HEATING_HEAT_CURVE_MIN),
             "value", 
         )
     @property
     def HC_REG_HEATING_HEAT_CURVE_MAX(self): 
         return get_dict_value_or_none( 
-            self.__get_hp_diagnostics_data_by_register_name (REG_HEATING_HEAT_CURVE_MAX),
+            self.__get_heating_curve_data_by_register_name (REG_HEATING_HEAT_CURVE_MAX),
             "value", 
         )
         
     @property
     def HC_REG_HEATING_CURVE_PLUS5(self): 
         return get_dict_value_or_none( 
-            self.__get_hp_diagnostics_data_by_register_name (REG_HEATING_CURVE_PLUS5),
+            self.__get_heating_curve_data_by_register_name (REG_HEATING_CURVE_PLUS5),
             "value", 
         )
 
     @property
     def HC_REG_HEATING_CURVE_0(self): 
         return get_dict_value_or_none( 
-            self.__get_hp_diagnostics_data_by_register_name (REG_HEATING_CURVE_0),
+            self.__get_heating_curve_data_by_register_name (REG_HEATING_CURVE_0),
             "value", 
         )
     @property
     def HC_REG_HEATING_CURVE_MINUS5(self): 
         return get_dict_value_or_none( 
-            self.__get_hp_diagnostics_data_by_register_name (REG_HEATING_CURVE_MINUS5),
+            self.__get_heating_curve_data_by_register_name (REG_HEATING_CURVE_MINUS5),
             "value", 
         )
     @property
     def HC_REG_HEATING_HEAT_STOP(self): 
         return get_dict_value_or_none( 
-            self.__get_hp_diagnostics_data_by_register_name (REG_HEATING_HEAT_STOP),
+            self.__get_heating_curve_data_by_register_name (REG_HEATING_HEAT_STOP),
             "value", 
         )
     @property
     def HC_REG_HEATING_ROOM_FACTOR(self): 
         return get_dict_value_or_none( 
-            self.__get_hp_diagnostics_data_by_register_name (REG_HEATING_ROOM_FACTOR),
+            self.__get_heating_curve_data_by_register_name (REG_HEATING_ROOM_FACTOR),
             "value", 
         )
         
