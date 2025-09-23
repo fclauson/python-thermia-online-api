@@ -6,6 +6,8 @@ from ..utils.utils import pretty_json_string_except
 
 from typing import TYPE_CHECKING, Dict, List, Optional
 
+# changed return line from REG_Oper
+
 from ThermiaOnlineAPI.const import (
     REG_BRINE_IN,
     REG_BRINE_OUT,
@@ -742,13 +744,15 @@ class ThermiaHeatPump:
             self.__get_temperature_data_by_register_name(REG_OPER_DATA_BUFFER_TANK),
             "value",
         )
-
+# added in MA_SA on the end of this - as this seems to have changed in the API - 23-09-2025
+# I should really do this for classic but this will work for genesis as well 
+    
     @property
     def return_line_temperature(self):
         return get_dict_value_or_none(
             self.__get_temperature_data_by_register_name(REG_RETURN_LINE), "value"
         ) or get_dict_value_or_none(
-            self.__get_temperature_data_by_register_name(REG_OPER_DATA_RETURN), "value"
+            self.__get_temperature_data_by_register_name(REG_OPER_DATA_RETURN_MA_SA), "value"
         )
 
     @property
