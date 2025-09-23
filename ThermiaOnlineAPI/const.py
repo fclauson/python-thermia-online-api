@@ -45,7 +45,10 @@ REG_OPER_DATA_BUFFER_TANK = "REG_OPER_DATA_BUFFER_TANK"
 # Temperature registers ("classic" specific)
 ###############################################################################
 
-REG_RETURN_LINE = "REG_RETURN_LINE"
+#REG_RETURN_LINE = "REG_RETURN_LINE"
+# addred 29-09-2025 when it was noticed the return temp was missing 
+REG_OPER_DATA_RETURN_MA_SA = "REG_OPER_DATA_RETURN_MA_SA"
+
 REG_DESIRED_SUPPLY_LINE = "REG_DESIRED_SUPPLY_LINE"
 REG_OPER_DATA_SUPPLY_MA_SA = "REG_OPER_DATA_SUPPLY_MA_SA"
 REG_DESIRED_SUPPLY_LINE_TEMP = "REG_DESIRED_SUPPLY_LINE_TEMP"
