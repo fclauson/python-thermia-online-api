@@ -6,7 +6,7 @@ from ..utils.utils import pretty_json_string_except
 
 from typing import TYPE_CHECKING, Dict, List, Optional
 
-# changed return line from REG_Oper
+# added REG_OPER_DATA_RETURN_MA_SA (left the old return line) 25-Sept-2025
 
 from ThermiaOnlineAPI.const import (
     REG_BRINE_IN,
@@ -30,6 +30,7 @@ from ThermiaOnlineAPI.const import (
     REG_OPER_TIME_IMM3,
     REG_PID,
     REG_RETURN_LINE,
+    REG_OPER_DATA_RETURN_MA_SA,
     COMP_POWER_STATUS,
     COMP_STATUS,
     COMP_STATUS_ATEC,
