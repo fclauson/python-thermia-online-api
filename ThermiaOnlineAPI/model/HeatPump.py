@@ -849,21 +849,21 @@ class ThermiaHeatPump:
     
     @property
     def HC_REG_HEATING_HEAT_CURVE(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_CURVE),
             "value", 
         )
     @property
     def HC_REG_HEATING_HEAT_CURVE_max(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_CURVE),
             "maxValue", 
         )
     @property
     def HC_REG_HEATING_HEAT_CURVE_min(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_CURVE),
             "minValue", 
@@ -871,7 +871,7 @@ class ThermiaHeatPump:
 
     @property
     def HC_REG_HEATING_HEAT_CURVE_step(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_CURVE),
             "step", 
@@ -888,14 +888,14 @@ class ThermiaHeatPump:
 
     @property
     def HC_REG_HEATING_HEAT_CURVE_MIN_max(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_CURVE_MIN),
             "maxValue", 
         )
     @property
     def HC_REG_HEATING_HEAT_CURVE_MIN_min(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_CURVE_MIN),
             "minValue", 
@@ -903,7 +903,7 @@ class ThermiaHeatPump:
 
     @property
     def HC_REG_HEATING_HEAT_CURVE_MIN_step(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_CURVE_MIN),
             "step", 
@@ -918,14 +918,14 @@ class ThermiaHeatPump:
         )
     @property
     def HC_REG_HEATING_HEAT_CURVE_MAX_max(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_CURVE_MAX),
             "maxValue", 
         )
     @property
     def HC_REG_HEATING_HEAT_CURVE_MAX_min(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_CURVE_MAX),
             "minValue", 
@@ -933,7 +933,7 @@ class ThermiaHeatPump:
 
     @property
     def HC_REG_HEATING_HEAT_CURVE_MAX_step(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_CURVE_MAX),
             "step", 
@@ -949,14 +949,14 @@ class ThermiaHeatPump:
 
     @property
     def HC_REG_HEATING_CURVE_PLUS5_max(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_CURVE_PLUS5),
             "maxValue", 
         )
     @property
     def HC_REG_HEATING_CURVE_PLUS5_min(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_CURVE_PLUS5),
             "minValue", 
@@ -964,7 +964,7 @@ class ThermiaHeatPump:
 
     @property
     def HC_REG_HEATING_CURVE_PLUS5_step(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_CURVE_PLUS5),
             "step", 
@@ -980,14 +980,14 @@ class ThermiaHeatPump:
     
     @property
     def HC_REG_HEATING_CURVE_0_max(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_CURVE_0),
             "maxValue", 
         )
     @property
     def HC_REG_HEATING_CURVE_0_min(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_CURVE_0),
             "minValue", 
@@ -995,7 +995,7 @@ class ThermiaHeatPump:
 
     @property
     def HC_REG_HEATING_CURVE_0_step(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_CURVE_0),
             "step", 
@@ -1009,14 +1009,14 @@ class ThermiaHeatPump:
         )
     @property
     def HHC_REG_HEATING_CURVE_MINUS5(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_CURVE_MINUS5),
             "maxValue", 
         )
     @property
     def HC_REG_HEATING_CURVE_MINUS5(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_CURVE_MINUS5),
             "minValue", 
@@ -1024,7 +1024,7 @@ class ThermiaHeatPump:
 
     @property
     def HC_REG_HEATING_CURVE_MINUS5(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_CURVE_MINUS5),
             "step", 
@@ -1040,14 +1040,14 @@ class ThermiaHeatPump:
 
     @property
     def HC_REG_HEATING_HEAT_STOP_max(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_STOP),
             "maxValue", 
         )
     @property
     def HC_REG_HEATING_HEAT_STOP_min(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_STOP),
             "minValue", 
@@ -1055,7 +1055,7 @@ class ThermiaHeatPump:
 
     @property
     def HC_REG_HEATING_HEAT_STOP_step(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_STOP),
             "step", 
@@ -1070,14 +1070,14 @@ class ThermiaHeatPump:
         )
     @property
     def HC_REG_HEATING_ROOM_FACTOR_max(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_ROOM_FACTOR),
             "maxValue", 
         )
     @property
     def HC_REG_HEATING_ROOM_FACTOR_min(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_ROOM_FACTOR),
             "minValue", 
@@ -1085,7 +1085,7 @@ class ThermiaHeatPump:
 
     @property
     def HC_REG_HEATING_ROOM_FACTOR_step(self): 
-        self._LOGGER.debug("getting HC REG Heat Curve")
+        # self._LOGGER.debug("getting HC REG Heat Curve")
         return get_dict_value_or_none( 
             self.__get_heating_curve_data_by_register_name(REG_HEATING_ROOM_FACTOR),
             "step", 
