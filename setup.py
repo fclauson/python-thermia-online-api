@@ -24,7 +24,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     author="Francis",
     author_email="fclauson@icloud.com",
-    url="https://github.com/klejejs/python-thermia-online-api",
+    url="https://github.com/fclauson/python-thermia-online-api",
     download_url="https://github.com/fclauson/python-thermia-online-api/releases",
     keywords=["Thermia", "Online"],
     install_requires=[],
