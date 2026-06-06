@@ -1,790 +1,905 @@
-import logging
 from collections import ChainMap
-from datetime import datetime, timedelta
-import requests
-from requests.adapters import HTTPAdapter, Retry
-from requests import cookies
-import json
-import hashlib
-from typing import Dict, Optional
+from datetime import datetime
+import logging
+import sys
+from ..utils.utils import pretty_json_string_except
 
-# Framcis - added Operation diagnostics and heatcurve
+from typing import TYPE_CHECKING, Dict, List, Optional
+
+# added REG_OPER_DATA_RETURN_MA_SA (left the old return line) 25-Sept-2025
 
 from ThermiaOnlineAPI.const import (
-    REG_GROUP_HOT_WATER,
-    REG_GROUP_OPERATIONAL_OPERATION,
-    REG_GROUP_OPERATIONAL_STATUS,
-    REG_GROUP_OPERATIONAL_TIME,
-    REG_GROUP_TEMPERATURES,
-    REG_HOT_WATER_STATUS,
-    REG__HOT_WATER_BOOST,
-    REG_OPERATIONMODE,
+    REG_BRINE_IN,
+    REG_BRINE_OUT,
+    REG_ACTUAL_POOL_TEMP,
+    REG_COOL_SENSOR_SUPPLY,
+    REG_COOL_SENSOR_TANK,
+    REG_DESIRED_SUPPLY_LINE,
+    REG_DESIRED_SUPPLY_LINE_TEMP,
+    REG_DESIRED_SYS_SUPPLY_LINE_TEMP,
+    REG_INTEGRAL_LSD,
+    REG_OPERATIONAL_STATUS_PRIO1,
+    REG_OPERATIONAL_STATUS_PRIORITY_BITMASK,
+    REG_OPER_DATA_RETURN_MA_SA,
+    REG_OPER_DATA_SUPPLY_MA_SA,
+    REG_OPER_TIME_COMPRESSOR,
+    REG_OPER_TIME_HEATING,
+    REG_OPER_TIME_HOT_WATER,
+    REG_OPER_TIME_IMM1,
+    REG_OPER_TIME_IMM2,
+    REG_OPER_TIME_IMM3,
+    REG_PID,
+    REG_RETURN_LINE,
+    COMP_POWER_STATUS,
+    COMP_STATUS,
+    COMP_STATUS_ATEC,
+    COMP_STATUS_ITEC,
+    REG_SUPPLY_LINE,
+    DATETIME_FORMAT,
+    REG_OPER_DATA_BUFFER_TANK,
+    REG_SER_HOT_WATER_START,
+    REG_OPER_DATA_HOT_WATER,
+    REG_WEIGHTED_HOT_WATER_TEMP,
     REG_GROUP_OPERATIONAL_DIAGNOSTICS,
-    REG_GROUP_HEATING_CURVE, 
-    THERMIA_CONFIG_URL,
-    THERMIA_AZURE_AUTH_URL,
-    THERMIA_AZURE_AUTH_CLIENT_ID_AND_SCOPE,
-    THERMIA_AZURE_AUTH_REDIRECT_URI,
-    THERMIA_INSTALLATION_PATH,
+    REG_EXV_EVAP_PRESS_MA_SA,
+    REG_EXV_DATA_SUCTION_TEMP_MA_SA,
+    REG_OPER_DATA_EVAP_TEMP_MA_SA,
+    REG_EXV_SUPER_HEAT_MA_SA,
+    REG_EXV_OPEN_DEG_MA_SA,
+    REG_GROUP_HEATING_CURVE,
+    REG_DESIRED_DISTR_CIR1,
+    REG_DESIRED_DISTR_CIR2,
+    REG_HEATING_HEAT_CURVE,
+    REG_HEATING_HEAT_CURVE_MIN,
+    REG_HEATING_HEAT_CURVE_MAX,
+    REG_HEATING_CURVE_PLUS5,
+    REG_HEATING_CURVE_0,
+    REG_HEATING_CURVE_MINUS5,
+    REG_HEATING_HEAT_STOP,
+    REG_HEATING_ROOM_FACTOR
 )
 
+from ..utils.utils import get_dict_value_or_none, get_dict_value_or_default
 
-from ..exceptions.AuthenticationException import AuthenticationException
-from ..exceptions.NetworkException import NetworkException
-from ..model.HeatPump import ThermiaHeatPump
-from ..utils import utils
+if TYPE_CHECKING:
+    from ..api.ThermiaAPI import ThermiaAPI
 
-_LOGGER = logging.getLogger(__name__)
-
-# Azure auth URLs
-AZURE_AUTH_AUTHORIZE_URL = THERMIA_AZURE_AUTH_URL + "/oauth2/v2.0/authorize"
-AZURE_AUTH_GET_TOKEN_URL = THERMIA_AZURE_AUTH_URL + "/oauth2/v2.0/token"
-AZURE_SELF_ASSERTED_URL = THERMIA_AZURE_AUTH_URL + "/SelfAsserted"
-AZURE_AUTH_CONFIRM_URL = (
-    THERMIA_AZURE_AUTH_URL + "/api/CombinedSigninAndSignup/confirmed"
-)
-
-# Azure default headers
-azure_auth_request_headers = {
-    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+DEFAULT_REGISTER_INDEXES: Dict[str, Optional[int]] = {
+    "temperature": None,
+    "operation_mode": None,
+    "hot_water_switch": None,
+    "hot_water_boost_switch": None,
 }
 
-# Fix for multiple operation modes with the same value
-REG_OPERATIONMODE_SKIP_VALUES = ["REG_VALUE_OPERATION_MODE_SERVICE"]
 
+class ThermiaHeatPump:
+    def __init__(self, device_data: dict, api_interface: "ThermiaAPI"):
+        self.__device_id = str(device_data["id"])
+        self.__api_interface = api_interface
 
-class ThermiaAPI:
-    def __init__(self, email, password):
-        self.__email = email
-        self.__password = password
-        self.__token = None
-        self.__token_valid_to = None
-        self.__refresh_token_valid_to = None
-        self.__refresh_token = None
+        self._LOGGER = logging.getLogger(__name__ + "." + self.__device_id)
 
-        self.__default_request_headers = {
-            "Authorization": "Bearer ",
-            "Content-Type": "application/json",
-            "cache-control": "no-cache",
-            "Access-Control-Allow-Origin": "*",
+        self.__info = None
+        self.__status = None
+        self.__device_data = None
+
+        self.__device_config: Dict[str, Optional[str]] = {
+            "operational_status_register": None,
+            "operational_status_valueNamePrefix": None,
+            "operational_status_minRegisterValue": None,
         }
 
-        self.__session = requests.Session()
-        retry = Retry(
-            total=20, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504]
+        # GROUPS
+        self.__group_temperatures = None
+        self.__group_operational_status = None
+        self.__group_operational_time = None
+        self.__group_operational_operation = None
+        self.__group_operational_operation_read_only = None
+        
+        # added by Francis 28-3-2026 and is used if you are using an installer login 
+        self.__group_hot_water_installer = None 
+        self.__group_hp_diagnostics = None
+        self.__group_heating_curve = None 
+        
+        self.__group_hot_water: Dict[str, Optional[int]] = {
+            "hot_water_switch": None,
+            "hot_water_boost_switch": None,
+        }
+
+        self.__alarms = None
+        self.__historical_data_registers_map = None
+
+        self.__register_indexes = DEFAULT_REGISTER_INDEXES
+
+        # Precalculated data so it does not have to be updated - these fields are cacluated on each update and then can be used elsewhere 
+
+        self.__operational_statuses = None
+        self.__all_operational_statuses_map = None
+        self.__running_operational_statuses = None
+
+        self.__power_statuses = None
+        self.__all_power_statuses_map = None
+        self.__running_power_statuses = None
+
+        self.update_data()
+
+    def update_data(self):
+        self.__info = self.__api_interface.get_device_info(self.__device_id)
+        self.__status = self.__api_interface.get_device_status(self.__device_id)
+        self.__device_data = self.__api_interface.get_device_by_id(self.__device_id)
+
+        self.__register_indexes["temperature"] = get_dict_value_or_default(
+            self.__status, "heatingEffectRegisters", [None, None]
+        )[1]
+
+        self.__group_temperatures = self.__api_interface.get__group_temperatures(
+            self.__device_id
         )
-        adapter = HTTPAdapter(max_retries=retry)
-        self.__session.mount("https://", adapter)
+        self.__group_operational_status = (
+            self.__api_interface.get__group_operational_status(self.__device_id)
+        )
+        self.__group_operational_time = (
+            self.__api_interface.get__group_operational_time(self.__device_id)
+        )
+        self.__group_operational_operation = (
+            self.__api_interface.get_group_operational_operation(self)
+        )
+        self.__group_operational_operation_read_only = (
+            self.__api_interface.get_group_operational_operation_from_status(self)
+        )
+        self.__group_hot_water = self.__api_interface.get_group_hot_water(self)
+        
+        # Francis -Only available for installer - Francis 28-3-2026 
+        self.__group_hot_water_installer = self.__api_interface.get_group_hot_water_installer(self) 
+        self.__group_hp_diagnostics = self.__api_interface.get_hp_diagnostics (self) 
+        self.__group_heating_curve = self.__api_interface.get_heating_curve (self) 
 
-        self.configuration = self.__fetch_configuration()
-        self.authenticated = self.__authenticate()
+        self.__alarms = self.__api_interface.get_all_alarms(self.__device_id)
 
-    def get_devices(self):
-        self.__check_token_validity()
+        # Precalculate data (order is important)
+        self.__operational_statuses = (
+            self.__get_operational_statuses_from_operational_status()
+        )
+        self.__all_operational_statuses_map = (
+            self.__get_all_operational_statuses_from_operational_status()
+        )
+        self.__running_operational_statuses = self.__get_running_operational_statuses()
 
-        url = self.configuration["apiBaseUrl"] + "/api/v1/installationsInfo"
-        request = self.__session.get(url, headers=self.__default_request_headers)
-        status = request.status_code
+        self.__power_statuses = self.__get_power_statuses_from_operational_status()
+        self.__all_power_statuses_map = (
+            self.__get_all_power_statuses_from_power_status()
+        )
+        self.__running_power_statuses = self.__get_running_power_statuses()
 
-        if status != 200:
-            _LOGGER.error(
-                "Error fetching devices. Status: "
-                + str(status)
-                + ", Response: "
-                + request.text
+    def get_register_indexes(self):
+        return self.__register_indexes
+
+    def set_register_index_operation_mode(self, register_index: int):
+        self.__register_indexes["operation_mode"] = register_index
+
+    def set_register_index_hot_water_switch(self, register_index: Optional[int]):
+        self.__register_indexes["hot_water_switch"] = register_index
+
+    def set_register_index_hot_water_boost_switch(self, register_index: Optional[int]):
+        self.__register_indexes["hot_water_boost_switch"] = register_index
+
+    # Francis Update to set hot water start 03/04/2025
+    def set_hot_water_start_temperature(self, temperature: int):
+        self._LOGGER.info("set_hot_water_start_temperature : %s", temperature)
+        self.__api_interface.set_hot_water_start_temperature(self, temperature)
+        self.update_data()
+    
+    def set_temperature(self, temperature: int):
+        if self.__status is None:
+            self._LOGGER.error("Status not available, cannot set temperature")
+            return
+
+        self._LOGGER.info("Setting temperature to " + str(temperature))
+
+        self.__status["heatingEffect"] = (
+            temperature  # update local state before refetching data
+        )
+        self.__api_interface.set_temperature(self, temperature)
+        self.update_data()
+
+    def set_operation_mode(self, mode: str):
+        self._LOGGER.info("Setting operation mode to " + str(mode))
+
+        if self.__group_operational_operation is not None:
+            self.__group_operational_operation["current"] = (
+                mode  # update local state before refetching data
             )
+        self.__api_interface.set_operation_mode(self, mode)
+        self.update_data()
+
+    def set_hot_water_switch_state(self, state: int):
+        self._LOGGER.info("Setting hot water switch to " + str(state))
+
+        if self.__group_hot_water["hot_water_switch"] is None:
+            self._LOGGER.error("Hot water switch not available")
+            return
+
+        self.__group_hot_water["hot_water_switch"] = (
+            state  # update local state before refetching data
+        )
+        self.__api_interface.set_hot_water_switch_state(self, state)
+        self.update_data()
+
+    def set_hot_water_boost_switch_state(self, state: int):
+        self._LOGGER.info("Setting hot water boost switch to " + str(state))
+
+        if self.__group_hot_water["hot_water_boost_switch"] is None:
+            self._LOGGER.error("Hot water switch not available")
+            return
+
+        self.__group_hot_water["hot_water_boost_switch"] = (
+            state  # update local state before refetching data
+        )
+        self.__api_interface.set_hot_water_boost_switch_state(self, state)
+        self.update_data()
+
+    def get_all_available_register_groups(self):
+        installation_profile_id = get_dict_value_or_none(
+            self.__info, "installationProfileId"
+        )
+
+        if installation_profile_id is None:
             return []
 
-        response = utils.get_response_json_or_log_and_raise_exception(
-            request, "Error getting devices."
+        register_groups = self.__api_interface.get_all_available_groups(
+            installation_profile_id
         )
 
-        return response.get("items", [])
+        if register_groups is None:
+            return []
 
-    def get_device_by_id(self, device_id: str):
-        self.__check_token_validity()
+        return list(map(lambda x: x["name"], register_groups))
 
-        devices = self.get_devices()
-
-        device = [d for d in devices if str(d["id"]) == device_id]
-
-        if len(device) != 1:
-            _LOGGER.error("Error getting device by id: " + str(device_id))
-            return None
-
-        return device[0]
-
-    def get_device_info(self, device_id: str):
-        self.__check_token_validity()
-
-        url = self.configuration["apiBaseUrl"] + "/api/v1/installations/" + device_id
-        request = self.__session.get(url, headers=self.__default_request_headers)
-        status = request.status_code
-
-        if status != 200:
-            _LOGGER.error(
-                "Error fetching device info. Status: "
-                + str(status)
-                + ", Response: "
-                + str(request.text)
-            )
-            return None
-
-        return utils.get_response_json_or_log_and_raise_exception(
-            request, "Error getting device info."
+    def get_available_registers_for_group(self, register_group: str):
+        registers_for_group = self.__api_interface.get_register_group_json(
+            self.__device_id, register_group
         )
 
-    def get_device_status(self, device_id: str):
-        self.__check_token_validity()
+        if registers_for_group is None:
+            return []
 
-        url = (
-            self.configuration["apiBaseUrl"]
-            + "/api/v1/installationstatus/"
-            + device_id
-            + "/status"
-        )
-        request = self.__session.get(url, headers=self.__default_request_headers)
-        status = request.status_code
+        return list(map(lambda x: x["registerName"], registers_for_group))
 
-        if status != 200:
-            _LOGGER.error(
-                "Error fetching device status. Status :"
-                + str(status)
-                + ", Response: "
-                + request.text
-            )
-            return None
-
-        return utils.get_response_json_or_log_and_raise_exception(
-            request, "Error fetching device status."
-        )
-
-    def get_all_alarms(self, device_id: str):
-        self.__check_token_validity()
-
-        url = (
-            self.configuration["apiBaseUrl"]
-            + "/api/v1/installation/"
-            + str(device_id)
-            + "/events?onlyActiveAlarms=false"
-        )
-        request = self.__session.get(url, headers=self.__default_request_headers)
-        status = request.status_code
-
-        if status != 200:
-            _LOGGER.error(
-                "Error in getting device's alarms. Status: "
-                + str(status)
-                + ", Response: "
-                + request.text
-            )
-            return None
-
-        return utils.get_response_json_or_log_and_raise_exception(
-            request, "Error in getting device's alarms."
-        )
-
-    def get_historical_data_registers(self, device_id: str):
-        self.__check_token_validity()
-
-        url = (
-            self.configuration["apiBaseUrl"]
-            + "/api/v1/DataHistory/installation/"
-            + str(device_id)
-        )
-        request = self.__session.get(url, headers=self.__default_request_headers)
-        status = request.status_code
-
-        if status != 200:
-            _LOGGER.error(
-                "Error in historical data registers. Status: "
-                + str(status)
-                + ", Response: "
-                + request.text
-            )
-            return None
-
-        return utils.get_response_json_or_log_and_raise_exception(
-            request, "Error in historical data registers."
-        )
-
-    def get_historical_data(
-        self, device_id: str, register_id, start_date_str, end_date_str
+    def get_register_data_by_register_group_and_name(
+        self, register_group: str, register_name: str
     ):
-        self.__check_token_validity()
-
-        url = (
-            self.configuration["apiBaseUrl"]
-            + "/api/v1/datahistory/installation/"
-            + str(device_id)
-            + "/register/"
-            + str(register_id)
-            + "/minute?periodStart="
-            + start_date_str
-            + "&periodEnd="
-            + end_date_str
+        register_group_data: list = self.__api_interface.get_register_group_json(
+            self.__device_id, register_group
         )
-        request = self.__session.get(url, headers=self.__default_request_headers)
-        status = request.status_code
 
-        if status != 200:
-            _LOGGER.error(
-                "Error in historical data for specific register. Status: "
-                + str(status)
-                + ", Response: "
-                + request.text
-            )
+        if register_group_data is None:
+            self._LOGGER.error("No register group found for group: " + register_group)
             return None
 
-        return utils.get_response_json_or_log_and_raise_exception(
-            request, "Error in historical data for specific register."
+        return self.__get_data_from_group_by_register_name(
+            register_group_data, register_name
         )
 
-    def get_all_available_groups(self, installation_profile_id: int):
-        self.__check_token_validity()
-
-        url = (
-            self.configuration["apiBaseUrl"]
-            + "/api/v1/installationprofiles/"
-            + str(installation_profile_id)
-            + "/groups"
-        )
-
-        request = self.__session.get(url, headers=self.__default_request_headers)
-        status = request.status_code
-
-        if status != 200:
-            _LOGGER.error(
-                "Error in getting available groups. Status: "
-                + str(status)
-                + ", Response: "
-                + request.text
-            )
-            return None
-
-        return utils.get_response_json_or_log_and_raise_exception(
-            request, "Error in getting available groups."
-        )
-
-    def get__group_temperatures(self, device_id: str):
-        return self.__get_register_group(device_id, REG_GROUP_TEMPERATURES)
-
-    def get__group_operational_status(self, device_id: str):
-        return self.__get_register_group(device_id, REG_GROUP_OPERATIONAL_STATUS)
-
-    def get__group_operational_time(self, device_id: str):
-        return self.__get_register_group(device_id, REG_GROUP_OPERATIONAL_TIME)
-
-    def get_group_operational_operation(self, device: ThermiaHeatPump):
-        return self.__get_group_operational_operation_from_register_group(
-            device, REG_GROUP_OPERATIONAL_OPERATION
-        )
-
-    def get_group_operational_operation_from_status(self, device: ThermiaHeatPump):
-        return self.__get_group_operational_operation_from_register_group(
-            device, REG_GROUP_OPERATIONAL_STATUS
-        )
-
-    def __get_group_operational_operation_from_register_group(
-        self, device: ThermiaHeatPump, register_group: str
+    def set_register_data_by_register_group_and_name(
+        self, register_group: str, register_name: str, value: int
     ):
-        register_data = self.__get_register_group(device.id, register_group)
+        register_data = self.get_register_data_by_register_group_and_name(
+            register_group, register_name
+        )
 
-        data = [d for d in register_data if d["registerName"] == REG_OPERATIONMODE]
+        if register_data is None:
+            self._LOGGER.error(
+                "No register group found for group: "
+                + register_group
+                + " and register: "
+                + register_name
+                )
+            return None
+
+        self.__api_interface.set_register_value(self, register_data["id"], value)
+        self.update_data()
+
+    def __get_heat_temperature_data(self):
+        device_temperature_register_index = self.get_register_indexes()["temperature"]
+        if device_temperature_register_index is None:
+            return None
+
+        if self.__group_temperatures is None:
+            return None
+
+        data = [
+            d
+            for d in self.__group_temperatures
+            if d["registerId"] == device_temperature_register_index
+        ]
 
         if len(data) != 1:
-            # Operation mode not supported
+            # Temperature status not supported
             return None
 
         data = data[0]
 
-        device.set_register_index_operation_mode(data["registerId"])
+        return {
+            "minValue": data["minValue"],
+            "maxValue": data["maxValue"],
+            "step": data["step"],
+        }
 
-        current_operation_mode_value = int(data.get("registerValue"))
-        operation_modes_data = data.get("valueNames")
+    def __get_temperature_data_by_register_name(
+        self, register_name: str  # TEMPERATURE_REGISTERS
+    ):
+        if self.__group_temperatures is None:
+            return None
 
-        if operation_modes_data is not None:
-            operation_modes_map = map(
-                lambda values: (
-                    {
-                        values.get("value"): values.get("name").split(
-                            "REG_VALUE_OPERATION_MODE_"
-                        )[1],
-                    }
-                    if values.get("name") not in REG_OPERATIONMODE_SKIP_VALUES
-                    else {}
-                ),
-                operation_modes_data,
+        return self.__get_data_from_group_by_register_name(
+            self.__group_temperatures, register_name
+        )
+
+    # Francis get registers only available to installers  14-04-2025 - both installer and diagnostics 
+    
+    def __get_hot_water_installer_data_by_register_name(
+        self, register_name: str 
+    ):
+        if self.__group_hot_water_installer is None:
+            return None
+
+        return self.__get_data_from_group_by_register_name(
+            self.__group_hot_water_installer, register_name
+        )
+        
+    def __get_hp_diagnostics_data_by_register_name(
+        self, register_name: str  
+    ):
+        if self.__group_hp_diagnostics is None:
+            return None
+
+        return self.__get_data_from_group_by_register_name(
+            self.__group_hp_diagnostics, register_name
+        )
+        
+    def __get_heating_curve_data_by_register_name(
+        self, register_name: str  
+    ):
+        if self.__group_heating_curve is None:
+            return None
+
+        return self.__get_data_from_group_by_register_name(
+            self.__group_heating_curve, register_name
+        )
+        
+    def __get_operational_time_data_by_register_name(
+        self, register_name: str  # OPERATIONAL_TIME_REGISTERS
+    ):
+        if self.__group_operational_time is None:
+            return None
+
+        return self.__get_data_from_group_by_register_name(
+            self.__group_operational_time, register_name
+        )
+
+    def __get_data_from_group_by_register_name(self, group: list, register_name: str):
+        if group is None:
+            return None
+
+        data = [d for d in group if d["registerName"] == register_name]
+
+        if len(data) != 1:
+            # Register not in the group
+            return None
+
+        data = data[0]
+
+        return {
+            "id": data["registerId"],
+            "isReadOnly": data["isReadOnly"],
+            "minValue": data["minValue"],
+            "maxValue": data["maxValue"],
+            "step": data["step"],
+            "value": data["registerValue"],
+        }
+
+    def __get_active_alarms(self):
+        active_alarms = filter(
+            lambda alarm: get_dict_value_or_default(alarm, "isActiveAlarm", False)
+            is True,
+            self.__alarms or [],
+        )
+        return list(active_alarms)
+
+    def __set_historical_data_registers(self):
+        data = self.__api_interface.get_historical_data_registers(self.__device_id)
+
+        data_map = {}
+
+        if data is not None and data.get("registers") is not None:
+            registers = data["registers"]
+
+            for register in registers:
+                data_map[register["registerName"]] = register["registerId"]
+
+        self.__historical_data_registers_map = data_map
+
+    def __get_register_from_operational_status(
+        self, register_name: str
+    ) -> Optional[Dict]:
+        data = [
+            d
+            for d in self.__group_operational_status or []
+            if d["registerName"] == register_name
+        ]
+
+        if len(data) != 1:
+            return None
+
+        return data[0]
+
+    def __get_operational_statuses_from_operational_status(self) -> Optional[Dict]:
+        if self.__device_config["operational_status_register"] is not None:
+            data = self.__get_register_from_operational_status(
+                self.__device_config["operational_status_register"]
             )
-            operation_modes_list = list(filter(lambda x: x != {}, operation_modes_map))
-            operation_modes = ChainMap(*operation_modes_list)
+            if data is not None:
+                return data.get("valueNames", [])
 
-            current_operation_mode = [
-                name
-                for value, name in operation_modes.items()
-                if value == current_operation_mode_value
-            ]
-            if len(current_operation_mode) != 1:
-                # Something has gone wrong or operation mode not supported
-                return None
+        # Try to get the data from the REG_OPERATIONAL_STATUS_PRIO1 register
+        data = self.__get_register_from_operational_status(REG_OPERATIONAL_STATUS_PRIO1)
+        if data is not None:
+            self.__device_config["operational_status_register"] = (
+                REG_OPERATIONAL_STATUS_PRIO1
+            )
+            self.__device_config["operational_status_valueNamePrefix"] = (
+                "REG_VALUE_STATUS_"
+            )
+            return data.get("valueNames", [])
 
-            return {
-                "current": current_operation_mode[0],
-                "available": operation_modes,
-                "isReadOnly": data["isReadOnly"],
-            }
+        # Try to get the data from the COMP_STATUS_ATEC register
+        data = self.__get_register_from_operational_status(COMP_STATUS_ATEC)
+        if data is not None:
+            self.__device_config["operational_status_register"] = COMP_STATUS_ATEC
+            self.__device_config["operational_status_valueNamePrefix"] = "COMP_VALUE_"
+            return data.get("valueNames", [])
+
+        # Try to get the data from the COMP_STATUS_ITEC register
+        data = self.__get_register_from_operational_status(COMP_STATUS_ITEC)
+        if data is not None:
+            self.__device_config["operational_status_register"] = COMP_STATUS_ITEC
+            self.__device_config["operational_status_valueNamePrefix"] = "COMP_VALUE_"
+            return data.get("valueNames", [])
+
+        # Try to get the data from the REG_OPERATIONAL_STATUS_PRIORITY_BITMASK register
+        data = self.__get_register_from_operational_status(
+            REG_OPERATIONAL_STATUS_PRIORITY_BITMASK
+        )
+        if data is not None:
+            self.__device_config["operational_status_register"] = (
+                REG_OPERATIONAL_STATUS_PRIORITY_BITMASK
+            )
+            self.__device_config["operational_status_valueNamePrefix"] = "REG_VALUE_"
+            return data.get("valueNames", [])
+
+        # Try to get the data from the COMP_STATUS register
+        data = self.__get_register_from_operational_status(COMP_STATUS)
+        if data is not None:
+            self.__device_config["operational_status_register"] = COMP_STATUS
+            self.__device_config["operational_status_valueNamePrefix"] = "COMP_VALUE_"
+            self.__device_config["operational_status_minRegisterValue"] = (
+                "4"  # 4 is OFF
+            )
+            return data.get("valueNames", [])
 
         return None
 
-    def __get_switch_register_index_and_value_from_group_by_register_name(
-        self, register_group: list, register_name: str
-    ):
-        default_return_object = {
-            "registerId": None,
-            "registerValue": None,
-        }
+    def __get_all_operational_statuses_from_operational_status(
+        self,
+    ) -> Optional[ChainMap]:
+        data = self.__operational_statuses
 
-        switch_data_list = [
-            d for d in register_group if d["registerName"] == register_name
-        ]
+        if data is None:
+            return ChainMap()
 
-        if len(switch_data_list) != 1:
-            # Switch not supported
-            return default_return_object
-
-        switch_data: dict = switch_data_list[0]
-
-        register_value = switch_data.get("registerValue")
-
-        if register_value is None:
-            return default_return_object
-
-        # Validate that register is a switch
-        switch_states_data = switch_data.get("valueNames")
-
-        if switch_states_data is None or len(switch_states_data) != 2:
-            return default_return_object
-
-        return {
-            "registerId": switch_data["registerId"],
-            "registerValue": int(register_value),
-        }
-
-    ## Francis update 03/04/2025 - installer and diagnostics 
-    def get_group_hot_water_installer (self, device: ThermiaHeatPump):
-        # _LOGGER.info("get_group_hot_water_installer") 
-        return self.__get_register_group(device.id, REG_GROUP_HOT_WATER)
-    
-    def get_hp_diagnostics (self, device: ThermiaHeatPump):
-        return self.__get_register_group(device.id, REG_GROUP_OPERATIONAL_DIAGNOSTICS )
-
-    def get_heating_curve (self, device: ThermiaHeatPump):
-        return self.__get_register_group(device.id, REG_GROUP_HEATING_CURVE )
-
-
-    def get_group_hot_water(self, device: ThermiaHeatPump) -> Dict[str, Optional[int]]:
-        register_data: list = self.__get_register_group(device.id, REG_GROUP_HOT_WATER)
-
-        hot_water_switch_data = (
-            self.__get_switch_register_index_and_value_from_group_by_register_name(
-                register_data, REG_HOT_WATER_STATUS
-            )
-        )
-        hot_water_boost_switch_data = (
-            self.__get_switch_register_index_and_value_from_group_by_register_name(
-                register_data, REG__HOT_WATER_BOOST
-            )
+        operation_statuses_map = map(
+            lambda values: {
+                values.get("value"): values.get("name").split(
+                    self.__device_config["operational_status_valueNamePrefix"]
+                )[1],
+            },
+            data,
         )
 
-        device.set_register_index_hot_water_switch(hot_water_switch_data["registerId"])
+        operation_statuses_list = list(operation_statuses_map)
+        return ChainMap(*operation_statuses_list)
 
-        device.set_register_index_hot_water_boost_switch(
-            hot_water_boost_switch_data["registerId"]
-        )
-
-        return {
-            "hot_water_switch": hot_water_switch_data["registerValue"],
-            "hot_water_boost_switch": hot_water_boost_switch_data["registerValue"],
-        }
-
-    def set_temperature(self, device: ThermiaHeatPump, temperature):
-        device_temperature_register_index = device.get_register_indexes()["temperature"]
-        if device_temperature_register_index is None:
-            _LOGGER.error(
-                "Error setting device's temperature. No temperature register index."
-            )
-            return
-
-        self.__set_register_value(
-            device, device_temperature_register_index, temperature
-        )
-
-    ## Francis updated 03/04/2025 
-    def set_hot_water_start_temperature(self, device: ThermiaHeatPump, temperature):
-        # Hardcoding for the second to see how it works 
-        _LOGGER.info("set_hot_water_start_temp : %s",temperature)
-        device_temperature_register_index = 107061 
-        if device_temperature_register_index is None:
-            _LOGGER.error(
-                "Error setting device's temperature. No temperature register index."
-            )
-            return
-        self.__set_register_value(
-            device, device_temperature_register_index, temperature
-        )
-
-    def set_operation_mode(self, device: ThermiaHeatPump, mode):
-        if device.is_operation_mode_read_only:
-            _LOGGER.error(
-                "Error setting device's operation mode. Operation mode is read only."
-            )
-            return
-
-        operation_mode_int = None
-
-        for value, name in device.available_operation_mode_map.items():
-            if name == mode:
-                operation_mode_int = value
-
-        if operation_mode_int is None:
-            _LOGGER.error(
-                "Error setting device's operation mode. Invalid operation mode."
-            )
-            return
-
-        device_operation_mode_register_index = device.get_register_indexes()[
-            "operation_mode"
-        ]
-        if device_operation_mode_register_index is None:
-            _LOGGER.error(
-                "Error setting device's operation mode. No operation mode register index."
-            )
-            return
-
-        self.__set_register_value(
-            device, device_operation_mode_register_index, operation_mode_int
-        )
-
-    def set_hot_water_switch_state(
-        self, device: ThermiaHeatPump, state: int
-    ):  # 0 - off, 1 - on
-        register_index = device.get_register_indexes()["hot_water_switch"]
-        if register_index is None:
-            _LOGGER.error(
-                "Error setting device's hot water switch state. No hot water switch register index."
-            )
-            return
-
-        self.__set_register_value(device, register_index, state)
-
-    def set_hot_water_boost_switch_state(
-        self, device: ThermiaHeatPump, state: int
-    ):  # 0 - off, 1 - on
-        register_index = device.get_register_indexes()["hot_water_boost_switch"]
-        if register_index is None:
-            _LOGGER.error(
-                "Error setting device's hot water boost switch state. No hot water boost switch register index."
-            )
-            return
-
-        self.__set_register_value(device, register_index, state)
-
-    def get_register_group_json(self, device_id: str, register_group: str) -> list:
-        return self.__get_register_group(device_id, register_group)
-
-    def set_register_value(
-        self, device: ThermiaHeatPump, register_index: int, value: int
-    ):
-        self.__set_register_value(device, register_index, value)
-
-    def __get_register_group(self, device_id: str, register_group: str) -> list:
-        self.__check_token_validity()
-
-        url = (
-            self.configuration["apiBaseUrl"]
-            + THERMIA_INSTALLATION_PATH
-            + str(device_id)
-            + "/Groups/"
-            + register_group
-        )
-        request = self.__session.get(url, headers=self.__default_request_headers)
-        status = request.status_code
-
-        if status != 200:
-            _LOGGER.error(
-                "Error in getting device's register group: "
-                + register_group
-                + ", Status: "
-                + str(status)
-                + ", Response: "
-                + request.text
-            )
+    def __get_running_operational_statuses(
+        self,
+    ) -> List[str]:
+        if self.__device_config["operational_status_register"] is None:
             return []
 
-        return utils.get_response_json_or_log_and_raise_exception(
-            request, "Error in getting device's register group: " + register_group
+        data = self.__get_register_from_operational_status(
+            self.__device_config["operational_status_register"]
         )
 
-    def __set_register_value(
-        self, device: ThermiaHeatPump, register_index: int, register_value: int
-    ):
-        self.__check_token_validity()
-        # Francis added debug 
-        _LOGGER.info("set_register_value : device.id=%s, register_index=%s, register_value=%s", device.id,  register_index, register_value)
-        url = (
-            self.configuration["apiBaseUrl"]
-            + THERMIA_INSTALLATION_PATH
-            + str(device.id)
-            + "/Registers"
-        )
-        body = {
-            "registerSpecificationId": register_index,
-            "registerValue": register_value,
-            "clientUuid": "api-client-uuid",
-        }
+        if data is None:
+            return []
 
-        request = self.__session.post(
-            url, headers=self.__default_request_headers, json=body
-        )
+        current_register_value = get_dict_value_or_none(data, "registerValue")
 
-        status = request.status_code
-        if status != 200:
-            _LOGGER.error(
-                "Error setting register "
-                + str(register_index)
-                + " value. Status: "
-                + str(status)
-                + ", Response: "
-                + request.text
-            )
+        data = self.__all_operational_statuses_map
 
-    def __fetch_configuration(self):
-        request = self.__session.get(THERMIA_CONFIG_URL)
-        status = request.status_code
+        if data is None:
+            return []
 
-        if status != 200:
-            _LOGGER.error(
-                "Error fetching API configuration. Status: "
-                + str(status)
-                + ", Response: "
-                + request.text
-            )
-            raise NetworkException("Error fetching API configuration.", status)
+        data_items_list = list(data.items())
 
-        return utils.get_response_json_or_log_and_raise_exception(
-            request, "Error fetching API configuration."
-        )
+        current_operation_mode = [
+            value for key, value in data_items_list if key == current_register_value
+        ]
 
-    def __authenticate_refresh_token(self) -> Optional[str]:
-        request_token__data = {
-            "client_id": THERMIA_AZURE_AUTH_CLIENT_ID_AND_SCOPE,
-            "redirect_uri": THERMIA_AZURE_AUTH_REDIRECT_URI,
-            "scope": THERMIA_AZURE_AUTH_CLIENT_ID_AND_SCOPE,
-            "refresh_token": self.__refresh_token,
-            "grant_type": "refresh_token",
-        }
+        if len(current_operation_mode) == 1:
+            return current_operation_mode
 
-        request_token = self.__session.post(
-            AZURE_AUTH_GET_TOKEN_URL,
-            headers=azure_auth_request_headers,
-            data=request_token__data,
-        )
+        if (
+            len(current_operation_mode) != 1
+            and current_register_value > 0
+            and len(data_items_list) > 1
+        ):
+            # Attempt to get multiple statuses by binary sum of the values
+            data_items_list.sort(key=lambda x: x[0], reverse=True)
+            list_of_current_operation_statuses = []
 
-        if request_token.status_code != 200:
-            self.__refresh_token = None
-            self.__refresh_token_valid_to = None
+            if self.__device_config["operational_status_minRegisterValue"] is not None:
+                current_register_value -= int(
+                    self.__device_config["operational_status_minRegisterValue"]
+                )
 
-            error_text = (
-                "Reauthentication request failed with previous refresh token. Status: "
-                + str(request_token.status_code)
-                + ", Response: "
-                + request_token.text
-            )
-            _LOGGER.info(error_text)
+            for key, value in data_items_list:
+                if key <= current_register_value:
+                    current_register_value -= key
+                    list_of_current_operation_statuses.append(value)
 
+            if current_register_value == 0:
+                return list_of_current_operation_statuses
+
+        return []
+
+    def __get_power_statuses_from_operational_status(self) -> Optional[Dict]:
+        data = self.__get_register_from_operational_status(COMP_POWER_STATUS)
+
+        if data is None:
             return None
 
-        return request_token.text
+        return data.get("valueNames", [])
 
-    def __authenticate(self) -> bool:
-        refresh_azure_token = self.__refresh_token_valid_to and (
-            self.__refresh_token_valid_to > datetime.now().timestamp()
+    def __get_all_power_statuses_from_power_status(
+        self,
+    ) -> Optional[ChainMap]:
+        data = self.__power_statuses
+
+        if data is None:
+            return ChainMap()
+
+        power_statuses_map = map(
+            lambda values: {
+                values.get("value"): values.get("name").split("COMP_VALUE_STEP_")[1],
+            },
+            data,
         )
 
-        request_token_text = None
+        power_statuses_list = list(power_statuses_map)
+        return ChainMap(*power_statuses_list)
 
-        if refresh_azure_token:  # Refresh token
-            request_token_text = self.__authenticate_refresh_token()
+    def __get_running_power_statuses(
+        self,
+    ) -> List[str]:
+        data = self.__get_register_from_operational_status(COMP_POWER_STATUS)
 
-        if request_token_text is None:  # New token, or refresh failed
-            self.__token = None
-            self.__token_valid_to = None
+        if data is None:
+            return []
 
-            code_challenge = utils.generate_challenge(43)
+        current_register_value = get_dict_value_or_none(data, "registerValue")
 
-            request_auth__data = {
-                "client_id": THERMIA_AZURE_AUTH_CLIENT_ID_AND_SCOPE,
-                "scope": THERMIA_AZURE_AUTH_CLIENT_ID_AND_SCOPE,
-                "redirect_uri": THERMIA_AZURE_AUTH_REDIRECT_URI,
-                "response_type": "code",
-                "code_challenge": str(
-                    utils.base64_url_encode(
-                        hashlib.sha256(code_challenge.encode("utf-8")).digest()
-                    ),
-                    "utf-8",
-                ),
-                "code_challenge_method": "S256",
-            }
+        data = self.__all_power_statuses_map
 
-            request_auth = self.__session.get(
-                AZURE_AUTH_AUTHORIZE_URL, data=request_auth__data
-            )
+        if data is None:
+            return []
 
-            state_code = ""
-            csrf_token = ""
+        data_items_list = list(data.items())
 
-            if request_auth.status_code == 200:
-                settings_string = request_auth.text.split("var SETTINGS = ")
-                settings_string = settings_string[1].split("};")[0] + "}"
-                if len(settings_string) > 0:
-                    try:
-                        settings = json.loads(settings_string)
-                        state_code = str(settings["transId"]).split("=")[1]
-                        csrf_token = settings["csrf"]
-                    except Exception as e:
-                        _LOGGER.error(
-                            "Error parsing authorization API settings. "
-                            + str(request_auth.text),
-                            e,
-                        )
-                        raise NetworkException(
-                            "Error parsing authorization API settings. "
-                            + request_auth.text,
-                            e,
-                        )
-            else:
-                _LOGGER.error(
-                    "Error fetching authorization API. Status: "
-                    + str(request_auth.status_code)
-                    + ", Response: "
-                    + request_auth.text
-                )
-                raise NetworkException(
-                    "Error fetching authorization API.", request_auth.reason
-                )
+        current_power_status = [
+            value for key, value in data_items_list if key == current_register_value
+        ]
 
-            request_self_asserted__data = {
-                "request_type": "RESPONSE",
-                "signInName": self.__email,
-                "password": self.__password,
-            }
+        if len(current_power_status) == 1:
+            return current_power_status
 
-            request_self_asserted__query_params = {
-                "tx": "StateProperties=" + state_code,
-                "p": "B2C_1A_SignUpOrSigninOnline",
-            }
-
-            request_self_asserted = self.__session.post(
-                AZURE_SELF_ASSERTED_URL,
-                cookies=request_auth.cookies,
-                data=request_self_asserted__data,
-                headers={**azure_auth_request_headers, "X-Csrf-Token": csrf_token},
-                params=request_self_asserted__query_params,
-            )
-
-            if (
-                request_self_asserted.status_code != 200
-                or '{"status":"400"' in request_self_asserted.text
-            ):  # authentication failed
-                _LOGGER.error(
-                    "Error in API authencation. Wrong credentials "
-                    + str(request_self_asserted.text)
-                )
-                raise NetworkException(
-                    "Error in API authencation. Wrong credentials",
-                    request_self_asserted.text,
-                )
-
-            request_confirmed__cookies = request_self_asserted.cookies
-            cookie_obj = cookies.create_cookie(
-                name="x-ms-cpim-csrf", value=request_auth.cookies.get("x-ms-cpim-csrf")
-            )
-            request_confirmed__cookies.set_cookie(cookie_obj)
-
-            request_confirmed__params = {
-                "csrf_token": csrf_token,
-                "tx": "StateProperties=" + state_code,
-                "p": "B2C_1A_SignUpOrSigninOnline",
-            }
-
-            request_confirmed = self.__session.get(
-                AZURE_AUTH_CONFIRM_URL,
-                cookies=request_confirmed__cookies,
-                params=request_confirmed__params,
-            )
-
-            request_token__data = {
-                "client_id": THERMIA_AZURE_AUTH_CLIENT_ID_AND_SCOPE,
-                "redirect_uri": THERMIA_AZURE_AUTH_REDIRECT_URI,
-                "scope": THERMIA_AZURE_AUTH_CLIENT_ID_AND_SCOPE,
-                "code": utils.get_list_value_or_default(
-                    request_confirmed.url.split("code="), 1, ""
-                ),
-                "code_verifier": code_challenge,
-                "grant_type": "authorization_code",
-            }
-
-            request_token = self.__session.post(
-                AZURE_AUTH_GET_TOKEN_URL,
-                headers=azure_auth_request_headers,
-                data=request_token__data,
-            )
-
-            if request_token.status_code != 200:
-                error_text = (
-                    "Authentication request failed, please check credentials. Status: "
-                    + str(request_token.status_code)
-                    + ", Response: "
-                    + request_token.text
-                )
-                _LOGGER.error(error_text)
-                raise AuthenticationException(error_text)
-
-            request_token_text = request_token.text
-
-        try:
-            token_data = json.loads(request_token_text)
-        except Exception as e:
-            _LOGGER.error(
-                "Error parsing authentication token data. " + str(request_token_text),
-                e,
-            )
-            raise NetworkException(
-                "Error parsing authentication token data. " + request_token_text, e
-            )
-
-        self.__token = token_data["access_token"]
-        self.__token_valid_to = token_data["expires_on"]
-
-        # refresh token valid for 24h (maybe), but we refresh it every 6h for safety
-        self.__refresh_token_valid_to = (
-            datetime.now() + timedelta(hours=6)
-        ).timestamp()
-        self.__refresh_token = token_data.get("refresh_token")
-
-        self.__default_request_headers["Authorization"] = "Bearer " + self.__token
-
-        _LOGGER.info("Authentication was successful, token set.")
-
-        return True
-
-    def __check_token_validity(self):
         if (
-            self.__token_valid_to is None
-            or self.__token_valid_to < datetime.now().timestamp()
-            or self.__refresh_token_valid_to is None
-            or self.__refresh_token_valid_to < datetime.now().timestamp()
+            len(current_power_status) != 1
+            and current_register_value > 0
+            and len(data_items_list) > 1
         ):
-            _LOGGER.info("Token expired, re-authenticating.")
-            self.authenticated = self.__authenticate()
+            # Attempt to get multiple statuses by binary sum of the values
+            data_items_list.sort(key=lambda x: x[0], reverse=True)
+            list_of_current_power_statuses = []
 
+            for key, value in data_items_list:
+                if key <= current_register_value:
+                    current_register_value -= key
+                    list_of_current_power_statuses.append(value)
+
+            if current_register_value == 0:
+                return list_of_current_power_statuses
+
+        return []
+
+    @property
+    def name(self):
+        return get_dict_value_or_none(self.__info, "name")
+
+    @property
+    def id(self):
+        return self.__device_id
+
+    @property
+    def is_online(self):
+        return get_dict_value_or_none(self.__info, "isOnline")
+
+    @property
+    def last_online(self):
+        return get_dict_value_or_none(self.__info, "lastOnline")
+
+    @property
+    def model(self):
+        return get_dict_value_or_default(self.__device_data, "profile", {}).get(
+            "thermiaName"
+        )
+
+    @property
+    def model_id(self):
+        return get_dict_value_or_default(self.__device_data, "profile", {}).get("name")
+
+    @property
+    def has_indoor_temp_sensor(self):
+        return get_dict_value_or_none(self.__status, "hasIndoorTempSensor")
+
+    @property
+    def indoor_temperature(self):
+        if self.has_indoor_temp_sensor:
+            return get_dict_value_or_none(self.__status, "indoorTemperature")
+        else:
+            return self.heat_temperature
+
+    @property
+    def is_outdoor_temp_sensor_functioning(self):
+        return get_dict_value_or_none(self.__status, "isOutdoorTempSensorFunctioning")
+
+    @property
+    def outdoor_temperature(self):
+        return get_dict_value_or_none(self.__status, "outdoorTemperature")
+
+    @property
+    def is_hot_water_active(self):
+        return get_dict_value_or_none(
+            self.__status, "isHotwaterActive"
+        ) or get_dict_value_or_none(self.__status, "isHotWaterActive")
+
+    @property
+    def hot_water_temperature(self):
+        return get_dict_value_or_none(self.__status, "hotWaterTemperature")
+
+    ###########################################################################
+    # Heat temperature data
+    ###########################################################################
+
+    @property
+    def heat_temperature(self):
+        return get_dict_value_or_none(self.__status, "heatingEffect")
+
+    @property
+    def heat_min_temperature_value(self):
+        data = self.__get_heat_temperature_data()
+        return get_dict_value_or_none(data, "minValue") if data else None
+
+    @property
+    def heat_max_temperature_value(self):
+        data = self.__get_heat_temperature_data()
+        return get_dict_value_or_none(data, "maxValue") if data else None
+
+    @property
+    def heat_temperature_step(self):
+        data = self.__get_heat_temperature_data()
+        return get_dict_value_or_none(data, "step") if data else None
+
+    ###########################################################################
+    # Other temperature data
+    ###########################################################################
+
+    @property
+    def supply_line_temperature(self):
+        return get_dict_value_or_none(
+            self.__get_temperature_data_by_register_name(REG_SUPPLY_LINE), "value"
+        ) or get_dict_value_or_none(
+            self.__get_temperature_data_by_register_name(REG_OPER_DATA_SUPPLY_MA_SA),
+            "value",
+        )
+
+    @property
+    def desired_supply_line_temperature(self):
+        return (
+            get_dict_value_or_none(
+                self.__get_temperature_data_by_register_name(REG_DESIRED_SUPPLY_LINE),
+                "value",
+            )
+            or get_dict_value_or_none(
+                self.__get_temperature_data_by_register_name(
+                    REG_DESIRED_SUPPLY_LINE_TEMP
+                ),
+                "value",
+            )
+            or get_dict_value_or_none(
+                self.__get_temperature_data_by_register_name(
+                    REG_DESIRED_SYS_SUPPLY_LINE_TEMP
+                ),
+                "value",
+            )
+        )
+
+    @property
+    def buffer_tank_temperature(self):
+        return get_dict_value_or_none(
+            self.__get_temperature_data_by_register_name(REG_OPER_DATA_BUFFER_TANK),
+            "value",
+        )
+        
+    @property
+    def return_line_temperature(self):
+        return get_dict_value_or_none(
+            self.__get_temperature_data_by_register_name(REG_RETURN_LINE), "value"
+        ) or get_dict_value_or_none(
+            self.__get_temperature_data_by_register_name(REG_OPER_DATA_RETURN_MA_SA), "value"
+        )
+
+    @property
+    def brine_out_temperature(self):
+        return get_dict_value_or_none(
+            self.__get_temperature_data_by_register_name(REG_BRINE_OUT), "value"
+        )
+
+    @property
+    def pool_temperature(self):
+        return get_dict_value_or_none(
+            self.__get_temperature_data_by_register_name(REG_ACTUAL_POOL_TEMP), "value"
+        )
+
+    @property
+    def brine_in_temperature(self):
+        return get_dict_value_or_none(
+            self.__get_temperature_data_by_register_name(REG_BRINE_IN), "value"
+        )
+
+    @property
+    def cooling_tank_temperature(self):
+        return get_dict_value_or_none(
+            self.__get_temperature_data_by_register_name(REG_COOL_SENSOR_TANK), "value"
+        )
+
+    @property
+    def cooling_supply_line_temperature(self):
+        return get_dict_value_or_none(
+            self.__get_temperature_data_by_register_name(REG_COOL_SENSOR_SUPPLY),
+            "value",
+        )
+
+    # Added by Francis to expose more details of hot water - the lower temp and the weighted temp 
+    @property
+    def lower_hot_water_temperature(self):
+        return get_dict_value_or_none(
+            self.__get_temperature_data_by_register_name(REG_OPER_DATA_HOT_WATER),
+            "value",
+        )
+    @property
+    def weighted_hot_water_temperature(self):
+        return get_dict_value_or_none(
+            self.__get_temperature_data_by_register_name(REG_WEIGHTED_HOT_WATER_TEMP),
+            "value",
+        )
+    
+    ####################################################### 
+    # Only available if you have the installer type login - Francis 26/03/2025
+    #######################################################
+
+    # these are from the hot water reg group 
+    @property
+    def start_hot_water_temperature(self):
+        return get_dict_value_or_none(
+            self.__get_hot_water_installer_data_by_register_name(REG_SER_HOT_WATER_START),
+            "value",
+        )
+
+    @property
+    def evaporator_pressure(self): 
+        return get_dict_value_or_none( 
+            self.__get_hp_diagnostics_data_by_register_name (REG_EXV_EVAP_PRESS_MA_SA),
+            "value", 
+        )
+    @property
+    def suction_temp(self): 
+        return get_dict_value_or_none( 
+            self.__get_hp_diagnostics_data_by_register_name (REG_EXV_DATA_SUCTION_TEMP_MA_SA),
+            "value", 
+        )
+    @property
+    def evaporator_temp(self): 
+        return get_dict_value_or_none( 
+            self.__get_hp_diagnostics_data_by_register_name (REG_OPER_DATA_EVAP_TEMP_MA_SA),
+            "value" ,
+        )
+    @property
+    def super_heat(self): 
+        return get_dict_value_or_none( 
+            self.__get_hp_diagnostics_data_by_register_name (REG_EXV_SUPER_HEAT_MA_SA),
+            "value" ,
+        )
+    @property
+    def opening_degree(self): 
+        return get_dict_value_or_none( 
+            self.__get_hp_diagnostics_data_by_register_name (REG_EXV_OPEN_DEG_MA_SA),
+            "value", 
+        )
+    ##############################################    
+    #### these are from the heat curve group - Francis April 2025 
+    ##############################################
+    
+    @property
+    def HC_REG_HEATING_HEAT_CURVE(self): 
+        return get_dict_value_or_none( 
+            self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_CURVE),
+            "value", 
+        )
+    @property
+    def HC_REG_HEATING_HEAT_CURVE_max(self): 
+        return get_dict_value_or_none( 
+            self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_CURVE),
+            "maxValue", 
+        )
+    @property
+    def HC_REG_HEATING_HEAT_CURVE_min(self): 
+        return get_dict_value_or_none( 
+            self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_CURVE),
+            "minValue", 
+        )  
+
+    @property
+    def HC_REG_HEATING_HEAT_CURVE_step(self): 
+        return get_dict_value_or_none( 
+            self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_CURVE),
+            "step", 
+        )
+
+    #********************
+    
+    @property
+    def HC_REG_HEATING_HEAT_CURVE_MIN(self): 
+        return get_dict_value_or_none( 
+            self.__get_heating_curve_data_by_register_name (REG_HEATING_HEAT_CURVE_MIN),
+            "value", 
+        )
+
+    @property
+    def HC_REG_HEATING_HEAT_CURVE_MIN_max(self): 
+        return get_dict_value_or_none( 
+            self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_CURVE_MIN),
+            "maxValue", 
+        )
+    @property
+    def HC_REG_HEATING_HEAT_CURVE_MIN_min(self): 
+        return get_dict_value_or_none( 
+            self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_CURVE_MIN),
+            "minValue", 
+        )  
+
+    @property
+    def HC_REG_HEATING_HEAT_CURVE_MIN_step(self): 
+        return get_dict_value_or_none( 
+            self.__get_heating_curve_data_by_register_name(REG_HEATING_HEAT_CURVE_MIN),
+            "step", 
+        )
