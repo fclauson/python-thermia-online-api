@@ -693,17 +693,28 @@ class ThermiaHeatPump:
     def heat_temperature(self):
         return get_dict_value_or_none(self.__status, "heatingEffect")
 
-    #@property
-    #def heat_min_temperature_value(self):
-    #    return get_dict_value_or_none(self.___temperature_data, "minValue")
+    @property
+    def heat_min_temperature_value(self):
+        # Safely checks if _temperature_data exists before looking up the key
+        data = getattr(self, "_temperature_data", None)
+        # If it's a callable function/method, call it; otherwise treat it as a dict
+        if callable(data):
+            data = data()
+        return get_dict_value_or_none(data, "minValue") if data else None
 
-    #@property
-    #def heat_max_temperature_value(self):
-    #    return get_dict_value_or_none(self.___temperature_data(), "maxValue")
+    @property
+    def heat_max_temperature_value(self):
+        data = getattr(self, "_temperature_data", None)
+        if callable(data):
+            data = data()
+        return get_dict_value_or_none(data, "maxValue") if data else None
 
-    #@property
-    #def heat_temperature_step(self):
-    #    return get_dict_value_or_none(self.___temperature_data(), "step")
+    @property
+    def heat_temperature_step(self):
+        data = getattr(self, "_temperature_data", None)
+        if callable(data):
+            data = data()
+        return get_dict_value_or_none(data, "step") if data else None
 
     ###########################################################################
     # Other temperature data
