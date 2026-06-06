@@ -698,7 +698,7 @@ class ThermiaHeatPump:
         return get_dict_value_or_none(self.___temperature_data, "minValue")
 
     @property
-     def heat_max_temperature_value(self):
+    def heat_max_temperature_value(self):
         return get_dict_value_or_none(self.___temperature_data(), "maxValue")
 
     @property
