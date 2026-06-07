@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timedelta
 import requests
 from requests.adapters import HTTPAdapter, Retry
-from requests import cookies  # Kept here as it's used in the deep __authenticate method
+from requests import cookies
 import json
 import hashlib
 from typing import Dict, Optional, Any, List
@@ -73,7 +73,7 @@ class ThermiaAPI:
         self.authenticated = self.__authenticate()
 
     def __make_get_request(self, url: str, error_msg: str) -> Optional[List[Dict[str, Any]]]:
-        """Reviewer #1: Helper to eliminate repetitive GET request logic across the API."""
+        """Helper to eliminate repetitive GET request logic across the API with proper trace preservation."""
         self.__check_token_validity()
         try:
             response = self.__session.get(url, headers=self.__default_request_headers, timeout=GLOBAL_TIMEOUT)
@@ -83,7 +83,7 @@ class ThermiaAPI:
             return utils.get_response_json_or_log_and_raise_exception(response, error_msg)
         except requests.RequestException as e:
             _LOGGER.error("Timeout or network error during '%s': %s", error_msg, e)
-            return None
+            raise NetworkException(f"Network timeout during {error_msg}", e)
 
     def get_devices(self) -> List[Dict[str, Any]]:
         url = f"{self.configuration['apiBaseUrl']}/api/v1/installationsInfo"
@@ -91,7 +91,6 @@ class ThermiaAPI:
         return response.get("items", []) if response else []
 
     def get_device_by_id(self, device_id: str) -> Optional[Dict[str, Any]]:
-        # Reviewer #4: Simplified lookup using next()
         devices = self.get_devices()
         device = next((d for d in devices if str(d["id"]) == str(device_id)), None)
         if device is None:
@@ -156,7 +155,6 @@ class ThermiaAPI:
         operation_modes_data = data.get("valueNames")
 
         if operation_modes_data is not None:
-            # Reviewer #5: Cleaned up ugly nested lambda maps with an explicit readable loop
             operation_modes = {}
             for values in operation_modes_data:
                 name = values.get("name", "")
@@ -236,7 +234,6 @@ class ThermiaAPI:
         self.__set_register_value(device, device_temperature_register_index, safe_temp)
 
     def set_hot_water_start_temperature(self, device: ThermiaHeatPump, temperature: Any):
-        # Reviewer #2: Eliminated hardcoded magic numbers
         _LOGGER.info("set_hot_water_start_temp requested: %s", temperature)
         safe_temp = int(round(float(temperature)))
         self.__set_register_value(device, HOT_WATER_START_TEMP_REGISTER_INDEX, safe_temp)
@@ -285,7 +282,6 @@ class ThermiaAPI:
         return response if response else []
 
     def __set_register_value(self, device: ThermiaHeatPump, register_index: int, register_value: int):
-        """Modified: Keeps log patterns but raises NetworkExceptions on failure to notify HA frontend cleanly."""
         self.__check_token_validity()
         _LOGGER.info("set_register_value: device.id=%s, register_index=%s, register_value=%s", device.id, register_index, register_value)
         
@@ -303,7 +299,8 @@ class ThermiaAPI:
                 raise NetworkException(f"Failed to set register value. API returned status {request.status_code}")
         except requests.RequestException as e:
             _LOGGER.error("Timeout or network error setting register %s: %s", register_index, e)
-            raise NetworkException("Network timeout updating register state via cloud API")
+            # Preserves context context downstream for Home Assistant UI
+            raise NetworkException("Network timeout updating register state via cloud API", e)
 
     def __fetch_configuration(self) -> Dict[str, Any]:
         try:
