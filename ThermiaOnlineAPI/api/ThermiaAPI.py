@@ -6,10 +6,9 @@ from requests.adapters import HTTPAdapter, Retry
 from requests import cookies
 import json
 import hashlib
-from typing import Dict, Optional
+from typing import Dict, Optional, Any, List
 
-# Framcis - added Operation diagnostics and heatcurve
-
+# Francis - added Operation diagnostics and heatcurve
 from ThermiaOnlineAPI.const import (
     REG_GROUP_HOT_WATER,
     REG_GROUP_OPERATIONAL_OPERATION,
@@ -27,7 +26,6 @@ from ThermiaOnlineAPI.const import (
     THERMIA_AZURE_AUTH_REDIRECT_URI,
     THERMIA_INSTALLATION_PATH,
 )
-
 
 from ..exceptions.AuthenticationException import AuthenticationException
 from ..exceptions.NetworkException import NetworkException
@@ -70,8 +68,9 @@ class ThermiaAPI:
         }
 
         self.__session = requests.Session()
+        # Reduced total retries slightly to prevent stalling threads indefinitely during cloud outages
         retry = Retry(
-            total=20, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504]
+            total=5, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504]
         )
         adapter = HTTPAdapter(max_retries=retry)
         self.__session.mount("https://", adapter)
@@ -79,7 +78,7 @@ class ThermiaAPI:
         self.configuration = self.__fetch_configuration()
         self.authenticated = self.__authenticate()
 
-    def get_devices(self):
+    def get_devices(self) -> List[Dict[str, Any]]:
         self.__check_token_validity()
 
         url = self.configuration["apiBaseUrl"] + "/api/v1/installationsInfo"
@@ -88,10 +87,9 @@ class ThermiaAPI:
 
         if status != 200:
             _LOGGER.error(
-                "Error fetching devices. Status: "
-                + str(status)
-                + ", Response: "
-                + request.text
+                "Error fetching devices. Status: %s, Response: %s",
+                status,
+                request.text
             )
             return []
 
@@ -101,20 +99,19 @@ class ThermiaAPI:
 
         return response.get("items", [])
 
-    def get_device_by_id(self, device_id: str):
+    def get_device_by_id(self, device_id: str) -> Optional[Dict[str, Any]]:
         self.__check_token_validity()
 
         devices = self.get_devices()
-
         device = [d for d in devices if str(d["id"]) == device_id]
 
         if len(device) != 1:
-            _LOGGER.error("Error getting device by id: " + str(device_id))
+            _LOGGER.error("Error getting device by id: %s", device_id)
             return None
 
         return device[0]
 
-    def get_device_info(self, device_id: str):
+    def get_device_info(self, device_id: str) -> Optional[Dict[str, Any]]:
         self.__check_token_validity()
 
         url = self.configuration["apiBaseUrl"] + "/api/v1/installations/" + device_id
@@ -123,10 +120,9 @@ class ThermiaAPI:
 
         if status != 200:
             _LOGGER.error(
-                "Error fetching device info. Status: "
-                + str(status)
-                + ", Response: "
-                + str(request.text)
+                "Error fetching device info. Status: %s, Response: %s",
+                status,
+                request.text
             )
             return None
 
@@ -134,7 +130,7 @@ class ThermiaAPI:
             request, "Error getting device info."
         )
 
-    def get_device_status(self, device_id: str):
+    def get_device_status(self, device_id: str) -> Optional[Dict[str, Any]]:
         self.__check_token_validity()
 
         url = (
@@ -148,10 +144,9 @@ class ThermiaAPI:
 
         if status != 200:
             _LOGGER.error(
-                "Error fetching device status. Status :"
-                + str(status)
-                + ", Response: "
-                + request.text
+                "Error fetching device status. Status: %s, Response: %s",
+                status,
+                request.text
             )
             return None
 
@@ -159,7 +154,7 @@ class ThermiaAPI:
             request, "Error fetching device status."
         )
 
-    def get_all_alarms(self, device_id: str):
+    def get_all_alarms(self, device_id: str) -> Optional[Dict[str, Any]]:
         self.__check_token_validity()
 
         url = (
@@ -173,10 +168,9 @@ class ThermiaAPI:
 
         if status != 200:
             _LOGGER.error(
-                "Error in getting device's alarms. Status: "
-                + str(status)
-                + ", Response: "
-                + request.text
+                "Error in getting device's alarms. Status: %s, Response: %s",
+                status,
+                request.text
             )
             return None
 
@@ -184,7 +178,7 @@ class ThermiaAPI:
             request, "Error in getting device's alarms."
         )
 
-    def get_historical_data_registers(self, device_id: str):
+    def get_historical_data_registers(self, device_id: str) -> Optional[Dict[str, Any]]:
         self.__check_token_validity()
 
         url = (
@@ -197,10 +191,9 @@ class ThermiaAPI:
 
         if status != 200:
             _LOGGER.error(
-                "Error in historical data registers. Status: "
-                + str(status)
-                + ", Response: "
-                + request.text
+                "Error in historical data registers. Status: %s, Response: %s",
+                status,
+                request.text
             )
             return None
 
@@ -209,8 +202,8 @@ class ThermiaAPI:
         )
 
     def get_historical_data(
-        self, device_id: str, register_id, start_date_str, end_date_str
-    ):
+        self, device_id: str, register_id: Any, start_date_str: str, end_date_str: str
+    ) -> Optional[Dict[str, Any]]:
         self.__check_token_validity()
 
         url = (
@@ -229,10 +222,9 @@ class ThermiaAPI:
 
         if status != 200:
             _LOGGER.error(
-                "Error in historical data for specific register. Status: "
-                + str(status)
-                + ", Response: "
-                + request.text
+                "Error in historical data for specific register. Status: %s, Response: %s",
+                status,
+                request.text
             )
             return None
 
@@ -240,7 +232,7 @@ class ThermiaAPI:
             request, "Error in historical data for specific register."
         )
 
-    def get_all_available_groups(self, installation_profile_id: int):
+    def get_all_available_groups(self, installation_profile_id: int) -> Optional[Dict[str, Any]]:
         self.__check_token_validity()
 
         url = (
@@ -255,10 +247,9 @@ class ThermiaAPI:
 
         if status != 200:
             _LOGGER.error(
-                "Error in getting available groups. Status: "
-                + str(status)
-                + ", Response: "
-                + request.text
+                "Error in getting available groups. Status: %s, Response: %s",
+                status,
+                request.text
             )
             return None
 
@@ -266,34 +257,34 @@ class ThermiaAPI:
             request, "Error in getting available groups."
         )
 
-    def get__group_temperatures(self, device_id: str):
+    # Renamed double-underscores to single to prevent Home Assistant class mangling errors
+    def get_group_temperatures(self, device_id: str) -> list:
         return self.__get_register_group(device_id, REG_GROUP_TEMPERATURES)
 
-    def get__group_operational_status(self, device_id: str):
+    def get_group_operational_status(self, device_id: str) -> list:
         return self.__get_register_group(device_id, REG_GROUP_OPERATIONAL_STATUS)
 
-    def get__group_operational_time(self, device_id: str):
+    def get_group_operational_time(self, device_id: str) -> list:
         return self.__get_register_group(device_id, REG_GROUP_OPERATIONAL_TIME)
 
-    def get_group_operational_operation(self, device: ThermiaHeatPump):
+    def get_group_operational_operation(self, device: ThermiaHeatPump) -> Optional[dict]:
         return self.__get_group_operational_operation_from_register_group(
             device, REG_GROUP_OPERATIONAL_OPERATION
         )
 
-    def get_group_operational_operation_from_status(self, device: ThermiaHeatPump):
+    def get_group_operational_operation_from_status(self, device: ThermiaHeatPump) -> Optional[dict]:
         return self.__get_group_operational_operation_from_register_group(
             device, REG_GROUP_OPERATIONAL_STATUS
         )
 
     def __get_group_operational_operation_from_register_group(
         self, device: ThermiaHeatPump, register_group: str
-    ):
+    ) -> Optional[dict]:
         register_data = self.__get_register_group(device.id, register_group)
 
         data = [d for d in register_data if d["registerName"] == REG_OPERATIONMODE]
 
         if len(data) != 1:
-            # Operation mode not supported
             return None
 
         data = data[0]
@@ -325,7 +316,6 @@ class ThermiaAPI:
                 if value == current_operation_mode_value
             ]
             if len(current_operation_mode) != 1:
-                # Something has gone wrong or operation mode not supported
                 return None
 
             return {
@@ -338,7 +328,7 @@ class ThermiaAPI:
 
     def __get_switch_register_index_and_value_from_group_by_register_name(
         self, register_group: list, register_name: str
-    ):
+    ) -> dict:
         default_return_object = {
             "registerId": None,
             "registerValue": None,
@@ -349,17 +339,14 @@ class ThermiaAPI:
         ]
 
         if len(switch_data_list) != 1:
-            # Switch not supported
             return default_return_object
 
         switch_data: dict = switch_data_list[0]
-
         register_value = switch_data.get("registerValue")
 
         if register_value is None:
             return default_return_object
 
-        # Validate that register is a switch
         switch_states_data = switch_data.get("valueNames")
 
         if switch_states_data is None or len(switch_states_data) != 2:
@@ -371,16 +358,14 @@ class ThermiaAPI:
         }
 
     ## Francis update 03/04/2025 - installer and diagnostics 
-    def get_group_hot_water_installer (self, device: ThermiaHeatPump):
-        # _LOGGER.info("get_group_hot_water_installer") 
+    def get_group_hot_water_installer(self, device: ThermiaHeatPump) -> list:
         return self.__get_register_group(device.id, REG_GROUP_HOT_WATER)
     
-    def get_hp_diagnostics (self, device: ThermiaHeatPump):
-        return self.__get_register_group(device.id, REG_GROUP_OPERATIONAL_DIAGNOSTICS )
+    def get_hp_diagnostics(self, device: ThermiaHeatPump) -> list:
+        return self.__get_register_group(device.id, REG_GROUP_OPERATIONAL_DIAGNOSTICS)
 
-    def get_heating_curve (self, device: ThermiaHeatPump):
-        return self.__get_register_group(device.id, REG_GROUP_HEATING_CURVE )
-
+    def get_heating_curve(self, device: ThermiaHeatPump) -> list:
+        return self.__get_register_group(device.id, REG_GROUP_HEATING_CURVE)
 
     def get_group_hot_water(self, device: ThermiaHeatPump) -> Dict[str, Optional[int]]:
         register_data: list = self.__get_register_group(device.id, REG_GROUP_HOT_WATER)
@@ -397,7 +382,6 @@ class ThermiaAPI:
         )
 
         device.set_register_index_hot_water_switch(hot_water_switch_data["registerId"])
-
         device.set_register_index_hot_water_boost_switch(
             hot_water_boost_switch_data["registerId"]
         )
@@ -407,7 +391,7 @@ class ThermiaAPI:
             "hot_water_boost_switch": hot_water_boost_switch_data["registerValue"],
         }
 
-    def set_temperature(self, device: ThermiaHeatPump, temperature):
+    def set_temperature(self, device: ThermiaHeatPump, temperature: int):
         device_temperature_register_index = device.get_register_indexes()["temperature"]
         if device_temperature_register_index is None:
             _LOGGER.error(
@@ -420,20 +404,16 @@ class ThermiaAPI:
         )
 
     ## Francis updated 03/04/2025 
-    def set_hot_water_start_temperature(self, device: ThermiaHeatPump, temperature):
-        # Hardcoding for the second to see how it works 
-        _LOGGER.info("set_hot_water_start_temp : %s",temperature)
+    def set_hot_water_start_temperature(self, device: ThermiaHeatPump, temperature: int):
+        _LOGGER.info("set_hot_water_start_temp : %s", temperature)
         device_temperature_register_index = 107061 
-        if device_temperature_register_index is None:
-            _LOGGER.error(
-                "Error setting device's temperature. No temperature register index."
-            )
-            return
+        
+        # Ensure temperature value passed to the remote cloud API is mapped safely as an integer 
         self.__set_register_value(
-            device, device_temperature_register_index, temperature
+            device, device_temperature_register_index, int(temperature)
         )
 
-    def set_operation_mode(self, device: ThermiaHeatPump, mode):
+    def set_operation_mode(self, device: ThermiaHeatPump, mode: str):
         if device.is_operation_mode_read_only:
             _LOGGER.error(
                 "Error setting device's operation mode. Operation mode is read only."
@@ -512,12 +492,10 @@ class ThermiaAPI:
 
         if status != 200:
             _LOGGER.error(
-                "Error in getting device's register group: "
-                + register_group
-                + ", Status: "
-                + str(status)
-                + ", Response: "
-                + request.text
+                "Error in getting device's register group: %s, Status: %s, Response: %s",
+                register_group,
+                status,
+                request.text
             )
             return []
 
@@ -529,7 +507,6 @@ class ThermiaAPI:
         self, device: ThermiaHeatPump, register_index: int, register_value: int
     ):
         self.__check_token_validity()
-        # Francis added debug 
         _LOGGER.info("set_register_value : device.id=%s, register_index=%s, register_value=%s", device.id,  register_index, register_value)
         url = (
             self.configuration["apiBaseUrl"]
@@ -550,24 +527,21 @@ class ThermiaAPI:
         status = request.status_code
         if status != 200:
             _LOGGER.error(
-                "Error setting register "
-                + str(register_index)
-                + " value. Status: "
-                + str(status)
-                + ", Response: "
-                + request.text
+                "Error setting register %s value. Status: %s, Response: %s",
+                register_index,
+                status,
+                request.text
             )
 
-    def __fetch_configuration(self):
+    def __fetch_configuration(self) -> dict:
         request = self.__session.get(THERMIA_CONFIG_URL)
         status = request.status_code
 
         if status != 200:
             _LOGGER.error(
-                "Error fetching API configuration. Status: "
-                + str(status)
-                + ", Response: "
-                + request.text
+                "Error fetching API configuration. Status: %s, Response: %s",
+                status,
+                request.text
             )
             raise NetworkException("Error fetching API configuration.", status)
 
@@ -594,14 +568,11 @@ class ThermiaAPI:
             self.__refresh_token = None
             self.__refresh_token_valid_to = None
 
-            error_text = (
-                "Reauthentication request failed with previous refresh token. Status: "
-                + str(request_token.status_code)
-                + ", Response: "
-                + request_token.text
+            _LOGGER.info(
+                "Reauthentication request failed with previous refresh token. Status: %s, Response: %s",
+                request_token.status_code,
+                request_token.text
             )
-            _LOGGER.info(error_text)
-
             return None
 
         return request_token.text
@@ -653,21 +624,19 @@ class ThermiaAPI:
                         csrf_token = settings["csrf"]
                     except Exception as e:
                         _LOGGER.error(
-                            "Error parsing authorization API settings. "
-                            + str(request_auth.text),
-                            e,
+                            "Error parsing authorization API settings. Response: %s",
+                            request_auth.text,
+                            exc_info=True
                         )
                         raise NetworkException(
-                            "Error parsing authorization API settings. "
-                            + request_auth.text,
+                            "Error parsing authorization API settings. " + request_auth.text,
                             e,
                         )
             else:
                 _LOGGER.error(
-                    "Error fetching authorization API. Status: "
-                    + str(request_auth.status_code)
-                    + ", Response: "
-                    + request_auth.text
+                    "Error fetching authorization API. Status: %s, Response: %s",
+                    request_auth.status_code,
+                    request_auth.text
                 )
                 raise NetworkException(
                     "Error fetching authorization API.", request_auth.reason
@@ -697,11 +666,11 @@ class ThermiaAPI:
                 or '{"status":"400"' in request_self_asserted.text
             ):  # authentication failed
                 _LOGGER.error(
-                    "Error in API authencation. Wrong credentials "
-                    + str(request_self_asserted.text)
+                    "Error in API authentication. Wrong credentials. Response: %s",
+                    request_self_asserted.text
                 )
                 raise NetworkException(
-                    "Error in API authencation. Wrong credentials",
+                    "Error in API authentication. Wrong credentials",
                     request_self_asserted.text,
                 )
 
@@ -756,8 +725,9 @@ class ThermiaAPI:
             token_data = json.loads(request_token_text)
         except Exception as e:
             _LOGGER.error(
-                "Error parsing authentication token data. " + str(request_token_text),
-                e,
+                "Error parsing authentication token data. Data: %s",
+                request_token_text,
+                exc_info=True
             )
             raise NetworkException(
                 "Error parsing authentication token data. " + request_token_text, e
@@ -787,4 +757,3 @@ class ThermiaAPI:
         ):
             _LOGGER.info("Token expired, re-authenticating.")
             self.authenticated = self.__authenticate()
-
