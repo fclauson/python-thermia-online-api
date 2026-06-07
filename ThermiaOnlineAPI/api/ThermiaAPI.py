@@ -1,4 +1,6 @@
 import logging
+import re
+import uuid
 from datetime import datetime, timedelta
 import requests
 from requests.adapters import HTTPAdapter, Retry
@@ -56,8 +58,10 @@ class ThermiaAPI:
         self.__token_valid_to = None
         self.__refresh_token_valid_to = None
         self.__refresh_token = None
+        
+        # Recommendation #1: Generate unique client UUID once at initialization
+        self.__client_uuid = str(uuid.uuid4())
 
-        # Cleaned up unnecessary CORS request headers
         self.__default_request_headers = {
             "Authorization": "Bearer ",
             "Content-Type": "application/json",
@@ -70,6 +74,11 @@ class ThermiaAPI:
         self.__session.mount("https://", adapter)
 
         self.configuration = self.__fetch_configuration()
+        
+        # Recommendation #9: Validate core configuration layout strictly before completing initialization
+        if not self.configuration or "apiBaseUrl" not in self.configuration:
+            raise NetworkException("Invalid endpoint configuration infrastructure payload returned from system server.")
+            
         self.authenticated = self.__authenticate()
 
     def __make_get_request(self, url: str, error_msg: str) -> Optional[List[Dict[str, Any]]]:
@@ -159,8 +168,10 @@ class ThermiaAPI:
             for values in operation_modes_data:
                 name = values.get("name", "")
                 if name not in REG_OPERATIONMODE_SKIP_VALUES:
-                    mode_name = name.split("REG_VALUE_OPERATION_MODE_")[1]
-                    operation_modes[values.get("value")] = mode_name
+                    # Recommendation #4: Add bounds safety lookup check to protect split action
+                    if "REG_VALUE_OPERATION_MODE_" in name:
+                        mode_name = name.split("REG_VALUE_OPERATION_MODE_")[1]
+                        operation_modes[values.get("value")] = mode_name
 
             current_operation_mode = [
                 name for value, name in operation_modes.items() if value == current_operation_mode_value
@@ -225,7 +236,8 @@ class ThermiaAPI:
         }
 
     def set_temperature(self, device: ThermiaHeatPump, temperature: Any):
-        device_temperature_register_index = device.get_register_indexes()["temperature"]
+        # Recommendation #6: Prevent crash using safe .get() method layout instead of brackets
+        device_temperature_register_index = device.get_register_indexes().get("temperature")
         if device_temperature_register_index is None:
             _LOGGER.error("Error setting device's temperature. No temperature register index.")
             return
@@ -249,7 +261,8 @@ class ThermiaAPI:
             _LOGGER.error("Error setting device's operation mode. Invalid operation mode: %s", mode)
             return
 
-        device_operation_mode_register_index = device.get_register_indexes()["operation_mode"]
+        # Recommendation #6: Prevent crash using safe .get() method layout here too
+        device_operation_mode_register_index = device.get_register_indexes().get("operation_mode")
         if device_operation_mode_register_index is None:
             _LOGGER.error("Error setting device's operation mode. No operation mode register index.")
             return
@@ -257,14 +270,16 @@ class ThermiaAPI:
         self.__set_register_value(device, device_operation_mode_register_index, operation_mode_int)
 
     def set_hot_water_switch_state(self, device: ThermiaHeatPump, state: int):  
-        register_index = device.get_register_indexes()["hot_water_switch"]
+        # Recommendation #6: Safe .get() wrapper modification
+        register_index = device.get_register_indexes().get("hot_water_switch")
         if register_index is None:
             _LOGGER.error("Error setting device's hot water switch state. No register index.")
             return
         self.__set_register_value(device, register_index, int(state))
 
     def set_hot_water_boost_switch_state(self, device: ThermiaHeatPump, state: int):  
-        register_index = device.get_register_indexes()["hot_water_boost_switch"]
+        # Recommendation #6: Safe .get() wrapper modification
+        register_index = device.get_register_indexes().get("hot_water_boost_switch")
         if register_index is None:
             _LOGGER.error("Error setting device's hot water boost switch state. No register index.")
             return
@@ -274,7 +289,8 @@ class ThermiaAPI:
         return self.__get_register_group(device_id, register_group)
 
     def set_register_value(self, device: ThermiaHeatPump, register_index: int, value: int):
-        self.__set_register_value(device, register_index, int(value))
+        # Recommendation #8: Removed redundant nested typecast wrapper step here
+        self.__set_register_value(device, register_index, value)
 
     def __get_register_group(self, device_id: str, register_group: str) -> List[Dict[str, Any]]:
         url = f"{self.configuration['apiBaseUrl']}{THERMIA_INSTALLATION_PATH}{device_id}/Groups/{register_group}"
@@ -289,7 +305,7 @@ class ThermiaAPI:
         body = {
             "registerSpecificationId": register_index,
             "registerValue": register_value,
-            "clientUuid": "api-client-uuid",
+            "clientUuid": self.__client_uuid, # Assigned clean configurable generated initialization instance
         }
 
         try:
@@ -297,9 +313,11 @@ class ThermiaAPI:
             if request.status_code != 200:
                 _LOGGER.error("Error setting register %s value. Status: %s, Response: %s", register_index, request.status_code, request.text)
                 raise NetworkException(f"Failed to set register value. API returned status {request.status_code}")
+            else:
+                _LOGGER.info("Successfully synchronized register value %s to context endpoint update target.", register_index)
         except requests.RequestException as e:
             _LOGGER.error("Timeout or network error setting register %s: %s", register_index, e)
-            # Preserves context context downstream for Home Assistant UI
+            # Recommendation #5: Typo correction applied cleanly + your context-trace preservation logic
             raise NetworkException("Network timeout updating register state via cloud API", e)
 
     def __fetch_configuration(self) -> Dict[str, Any]:
@@ -367,7 +385,8 @@ class ThermiaAPI:
             }
 
             try:
-                request_auth = self.__session.get(AZURE_AUTH_AUTHORIZE_URL, data=request_auth__data, timeout=GLOBAL_TIMEOUT)
+                # Recommendation #10 (CRITICAL): Swapped 'data=' out for proper 'params=' query construction on GET
+                request_auth = self.__session.get(AZURE_AUTH_AUTHORIZE_URL, params=request_auth__data, timeout=GLOBAL_TIMEOUT)
             except requests.RequestException as e:
                 raise NetworkException("Timeout hitting Azure Authorize endpoint", e)
 
@@ -375,16 +394,20 @@ class ThermiaAPI:
             csrf_token = ""
 
             if request_auth.status_code == 200:
-                settings_string = request_auth.text.split("var SETTINGS = ")
-                settings_string = settings_string[1].split("};")[0] + "}"
-                if len(settings_string) > 0:
-                    try:
-                        settings = json.loads(settings_string)
-                        state_code = str(settings["transId"]).split("=")[1]
-                        csrf_token = settings["csrf"]
-                    except Exception as e:
-                        _LOGGER.error("Error parsing authorization API settings.", exc_info=True)
-                        raise NetworkException(f"Error parsing authorization API settings. {request_auth.text}", e)
+                # Recommendation #2 & #3: Extracted robust regex search structure instead of brittle manual split actions
+                settings_match = re.search(r'var SETTINGS = ({.*?});', request_auth.text)
+                if not settings_match:
+                    _LOGGER.error("Regex parsing failure locating structural SETTINGS payload within signature block response.")
+                    raise NetworkException("Could not parse SETTINGS object configuration frame properties from authorization web flow response.")
+                
+                try:
+                    # Recommendation #7: Strict target catching for structural JSON mapping operations
+                    settings = json.loads(settings_match.group(1))
+                    state_code = str(settings["transId"]).split("=")[1]
+                    csrf_token = settings["csrf"]
+                except (KeyError, IndexError, ValueError, json.JSONDecodeError) as e:
+                    _LOGGER.error("Structural mapping parsing error breaking context parameters matrix translation.", exc_info=True)
+                    raise NetworkException("Failed to decode context credentials parameter from login parameters data matrices context block.", e)
             else:
                 _LOGGER.error("Error fetching authorization API. Status: %s", request_auth.status_code)
                 raise NetworkException("Error fetching authorization API.", request_auth.reason)
