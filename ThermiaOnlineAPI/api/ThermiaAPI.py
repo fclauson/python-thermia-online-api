@@ -44,6 +44,10 @@ azure_auth_request_headers = {
 
 REG_OPERATIONMODE_SKIP_VALUES = ["REG_VALUE_OPERATION_MODE_SERVICE"]
 
+# Global safety timeouts: (Connect timeout, Read timeout) in seconds
+# This prevents the requests library from hanging forever on bad connections
+GLOBAL_TIMEOUT = (5, 10)
+
 
 class ThermiaAPI:
     def __init__(self, email, password):
@@ -62,9 +66,8 @@ class ThermiaAPI:
         }
 
         self.__session = requests.Session()
-        # Adjusted retry matrix to be resilient but avoid locking threads indefinitely
         retry = Retry(
-            total=5, backoff_factor=0.2, status_forcelist=[500, 502, 503, 504]
+            total=3, backoff_factor=0.3, status_forcelist=[500, 502, 503, 504]
         )
         adapter = HTTPAdapter(max_retries=retry)
         self.__session.mount("https://", adapter)
@@ -76,8 +79,12 @@ class ThermiaAPI:
         self.__check_token_validity()
 
         url = f"{self.configuration['apiBaseUrl']}/api/v1/installationsInfo"
-        request = self.__session.get(url, headers=self.__default_request_headers)
-        status = request.status_code
+        try:
+            request = self.__session.get(url, headers=self.__default_request_headers, timeout=GLOBAL_TIMEOUT)
+            status = request.status_code
+        except requests.RequestException as e:
+            _LOGGER.error("Timeout or network error fetching devices: %s", e)
+            return []
 
         if status != 200:
             _LOGGER.error("Error fetching devices. Status: %s, Response: %s", status, request.text)
@@ -103,61 +110,69 @@ class ThermiaAPI:
         self.__check_token_validity()
 
         url = f"{self.configuration['apiBaseUrl']}/api/v1/installations/{device_id}"
-        request = self.__session.get(url, headers=self.__default_request_headers)
-        status = request.status_code
+        try:
+            request = self.__session.get(url, headers=self.__default_request_headers, timeout=GLOBAL_TIMEOUT)
+            status = request.status_code
+        except requests.RequestException as e:
+            _LOGGER.error("Timeout or network error fetching device info: %s", e)
+            return None
 
         if status != 200:
             _LOGGER.error("Error fetching device info. Status: %s, Response: %s", status, request.text)
             return None
 
-        return utils.get_response_json_or_log_and_raise_exception(
-            request, "Error getting device info."
-        )
+        return utils.get_response_json_or_log_and_raise_exception(request, "Error getting device info.")
 
     def get_device_status(self, device_id: str) -> Optional[Dict[str, Any]]:
         self.__check_token_validity()
 
         url = f"{self.configuration['apiBaseUrl']}/api/v1/installationstatus/{device_id}/status"
-        request = self.__session.get(url, headers=self.__default_request_headers)
-        status = request.status_code
+        try:
+            request = self.__session.get(url, headers=self.__default_request_headers, timeout=GLOBAL_TIMEOUT)
+            status = request.status_code
+        except requests.RequestException as e:
+            _LOGGER.error("Timeout or network error fetching device status: %s", e)
+            return None
 
         if status != 200:
             _LOGGER.error("Error fetching device status. Status: %s, Response: %s", status, request.text)
             return None
 
-        return utils.get_response_json_or_log_and_raise_exception(
-            request, "Error fetching device status."
-        )
+        return utils.get_response_json_or_log_and_raise_exception(request, "Error fetching device status.")
 
     def get_all_alarms(self, device_id: str) -> Optional[Dict[str, Any]]:
         self.__check_token_validity()
 
         url = f"{self.configuration['apiBaseUrl']}/api/v1/installation/{device_id}/events?onlyActiveAlarms=false"
-        request = self.__session.get(url, headers=self.__default_request_headers)
-        status = request.status_code
+        try:
+            request = self.__session.get(url, headers=self.__default_request_headers, timeout=GLOBAL_TIMEOUT)
+            status = request.status_code
+        except requests.RequestException as e:
+            _LOGGER.error("Timeout or network error fetching alarms: %s", e)
+            return None
 
         if status != 200:
             _LOGGER.error("Error in getting device's alarms. Status: %s, Response: %s", status, request.text)
             return None
 
-        return utils.get_response_json_or_log_and_raise_exception(
-            request, "Error in getting device's alarms."
-        )
+        return utils.get_response_json_or_log_and_raise_exception(request, "Error in getting device's alarms.")
 
     def get_historical_data_registers(self, device_id: str) -> Optional[Dict[str, Any]]:
         self.__check_token_validity()
 
         url = f"{self.configuration['apiBaseUrl']}/api/v1/DataHistory/installation/{device_id}"
-        request = self.__session.get(url, headers=self.__default_request_headers)
-        status = request.status_code
+        try:
+            request = self.__session.get(url, headers=self.__default_request_headers, timeout=GLOBAL_TIMEOUT)
+            status = request.status_code
+        except requests.RequestException as e:
+            _LOGGER.error("Timeout or network error fetching historical registers: %s", e)
+            return None
 
         if status != 200:
             _LOGGER.error("Error in historical data registers. Status: %s, Response: %s", status, request.text)
             return None
 
-        return utils.get_response_json_or_log_and_raise_exception(
-            request, "Error in historical data registers."
-        )
+        return utils.get_response_json_or_log_and_raise_exception(request, "Error in historical data registers.")
 
     def get_historical_data(
         self, device_id: str, register_id: Any, start_date_str: str, end_date_str: str
@@ -168,33 +183,36 @@ class ThermiaAPI:
             f"{self.configuration['apiBaseUrl']}/api/v1/datahistory/installation/{device_id}"
             f"/register/{register_id}/minute?periodStart={start_date_str}&periodEnd={end_date_str}"
         )
-        request = self.__session.get(url, headers=self.__default_request_headers)
-        status = request.status_code
+        try:
+            request = self.__session.get(url, headers=self.__default_request_headers, timeout=GLOBAL_TIMEOUT)
+            status = request.status_code
+        except requests.RequestException as e:
+            _LOGGER.error("Timeout or network error fetching historical data: %s", e)
+            return None
 
         if status != 200:
             _LOGGER.error("Error in historical data for specific register. Status: %s, Response: %s", status, request.text)
             return None
 
-        return utils.get_response_json_or_log_and_raise_exception(
-            request, "Error in historical data for specific register."
-        )
+        return utils.get_response_json_or_log_and_raise_exception(request, "Error in historical data for specific register.")
 
     def get_all_available_groups(self, installation_profile_id: int) -> Optional[Dict[str, Any]]:
         self.__check_token_validity()
 
         url = f"{self.configuration['apiBaseUrl']}/api/v1/installationprofiles/{installation_profile_id}/groups"
-        request = self.__session.get(url, headers=self.__default_request_headers)
-        status = request.status_code
+        try:
+            request = self.__session.get(url, headers=self.__default_request_headers, timeout=GLOBAL_TIMEOUT)
+            status = request.status_code
+        except requests.RequestException as e:
+            _LOGGER.error("Timeout or network error fetching available groups: %s", e)
+            return None
 
         if status != 200:
             _LOGGER.error("Error in getting available groups. Status: %s, Response: %s", status, request.text)
             return None
 
-        return utils.get_response_json_or_log_and_raise_exception(
-            request, "Error in getting available groups."
-        )
+        return utils.get_response_json_or_log_and_raise_exception(request, "Error in getting available groups.")
 
-    # Public helper registers cleanup
     def get_group_temperatures(self, device_id: str) -> list:
         return self.__get_register_group(device_id, REG_GROUP_TEMPERATURES)
 
@@ -205,14 +223,10 @@ class ThermiaAPI:
         return self.__get_register_group(device_id, REG_GROUP_OPERATIONAL_TIME)
 
     def get_group_operational_operation(self, device: ThermiaHeatPump) -> Optional[dict]:
-        return self.__get_group_operational_operation_from_register_group(
-            device, REG_GROUP_OPERATIONAL_OPERATION
-        )
+        return self.__get_group_operational_operation_from_register_group(device, REG_GROUP_OPERATIONAL_OPERATION)
 
     def get_group_operational_operation_from_status(self, device: ThermiaHeatPump) -> Optional[dict]:
-        return self.__get_group_operational_operation_from_register_group(
-            device, REG_GROUP_OPERATIONAL_STATUS
-        )
+        return self.__get_group_operational_operation_from_register_group(device, REG_GROUP_OPERATIONAL_STATUS)
 
     def __get_group_operational_operation_from_register_group(
         self, device: ThermiaHeatPump, register_group: str
@@ -233,9 +247,7 @@ class ThermiaAPI:
             operation_modes_map = map(
                 lambda values: (
                     {
-                        values.get("value"): values.get("name").split(
-                            "REG_VALUE_OPERATION_MODE_"
-                        )[1],
+                        values.get("value"): values.get("name").split("REG_VALUE_OPERATION_MODE_")[1],
                     }
                     if values.get("name") not in REG_OPERATIONMODE_SKIP_VALUES
                     else {}
@@ -246,9 +258,7 @@ class ThermiaAPI:
             operation_modes = ChainMap(*operation_modes_list)
 
             current_operation_mode = [
-                name
-                for value, name in operation_modes.items()
-                if value == current_operation_mode_value
+                name for value, name in operation_modes.items() if value == current_operation_mode_value
             ]
             if len(current_operation_mode) != 1:
                 return None
@@ -258,17 +268,13 @@ class ThermiaAPI:
                 "available": operation_modes,
                 "isReadOnly": data["isReadOnly"],
             }
-
         return None
 
     def __get_switch_register_index_and_value_from_group_by_register_name(
         self, register_group: list, register_name: str
     ) -> dict:
         default_return_object = {"registerId": None, "registerValue": None}
-
-        switch_data_list = [
-            d for d in register_group if d["registerName"] == register_name
-        ]
+        switch_data_list = [d for d in register_group if d["registerName"] == register_name]
 
         if len(switch_data_list) != 1:
             return default_return_object
@@ -300,15 +306,11 @@ class ThermiaAPI:
     def get_group_hot_water(self, device: ThermiaHeatPump) -> Dict[str, Optional[int]]:
         register_data: list = self.__get_register_group(device.id, REG_GROUP_HOT_WATER)
 
-        hot_water_switch_data = (
-            self.__get_switch_register_index_and_value_from_group_by_register_name(
-                register_data, REG_HOT_WATER_STATUS
-            )
+        hot_water_switch_data = self.__get_switch_register_index_and_value_from_group_by_register_name(
+            register_data, REG_HOT_WATER_STATUS
         )
-        hot_water_boost_switch_data = (
-            self.__get_switch_register_index_and_value_from_group_by_register_name(
-                register_data, REG__HOT_WATER_BOOST
-            )
+        hot_water_boost_switch_data = self.__get_switch_register_index_and_value_from_group_by_register_name(
+            register_data, REG__HOT_WATER_BOOST
         )
 
         device.set_register_index_hot_water_switch(hot_water_switch_data["registerId"])
@@ -325,7 +327,6 @@ class ThermiaAPI:
             _LOGGER.error("Error setting device's temperature. No temperature register index.")
             return
 
-        # Explicitly safely cast float/string states down to register ints
         safe_temp = int(round(float(temperature)))
         self.__set_register_value(device, device_temperature_register_index, safe_temp)
 
@@ -381,14 +382,15 @@ class ThermiaAPI:
         self.__check_token_validity()
 
         url = f"{self.configuration['apiBaseUrl']}{THERMIA_INSTALLATION_PATH}{device_id}/Groups/{register_group}"
-        request = self.__session.get(url, headers=self.__default_request_headers)
-        status = request.status_code
+        try:
+            request = self.__session.get(url, headers=self.__default_request_headers, timeout=GLOBAL_TIMEOUT)
+            status = request.status_code
+        except requests.RequestException as e:
+            _LOGGER.error("Timeout or network error fetching register group %s: %s", register_group, e)
+            return []
 
         if status != 200:
-            _LOGGER.error(
-                "Error in getting device's register group: %s, Status: %s, Response: %s",
-                register_group, status, request.text
-            )
+            _LOGGER.error("Error in getting device's register group: %s, Status: %s", register_group, status)
             return []
 
         return utils.get_response_json_or_log_and_raise_exception(
@@ -397,7 +399,7 @@ class ThermiaAPI:
 
     def __set_register_value(self, device: ThermiaHeatPump, register_index: int, register_value: int):
         self.__check_token_validity()
-        _LOGGER.info("set_register_value : device.id=%s, register_index=%s, register_value=%s", device.id, register_index, register_value)
+        _LOGGER.info("set_register_value: device.id=%s, register_index=%s, register_value=%s", device.id, register_index, register_value)
         
         url = f"{self.configuration['apiBaseUrl']}{THERMIA_INSTALLATION_PATH}{device.id}/Registers"
         body = {
@@ -406,25 +408,30 @@ class ThermiaAPI:
             "clientUuid": "api-client-uuid",
         }
 
-        request = self.__session.post(url, headers=self.__default_request_headers, json=body)
-        status = request.status_code
-        if status != 200:
-            _LOGGER.error("Error setting register %s value. Status: %s, Response: %s", register_index, status, request.text)
+        try:
+            request = self.__session.post(url, headers=self.__default_request_headers, json=body, timeout=GLOBAL_TIMEOUT)
+            status = request.status_code
+            if status != 200:
+                _LOGGER.error("Error setting register %s value. Status: %s, Response: %s", register_index, status, request.text)
+        except requests.RequestException as e:
+            _LOGGER.error("Timeout or network error setting register %s: %s", register_index, e)
 
     def __fetch_configuration(self) -> dict:
-        request = self.__session.get(THERMIA_CONFIG_URL)
-        status = request.status_code
+        try:
+            request = self.__session.get(THERMIA_CONFIG_URL, timeout=GLOBAL_TIMEOUT)
+            status = request.status_code
+        except requests.RequestException as e:
+            _LOGGER.error("Critical timeout fetching API configuration framework: %s", e)
+            raise NetworkException("Critical timeout fetching API configuration framework.", 0)
 
         if status != 200:
             _LOGGER.error("Error fetching API configuration. Status: %s, Response: %s", status, request.text)
             raise NetworkException("Error fetching API configuration.", status)
 
-        return utils.get_response_json_or_log_and_raise_exception(
-            request, "Error fetching API configuration."
-        )
+        return utils.get_response_json_or_log_and_raise_exception(request, "Error fetching API configuration.")
 
     def __authenticate_refresh_token(self) -> Optional[str]:
-        _LOGGER.info("Attempting to refresh access token using refresh token.")
+        _LOGGER.info("Attempting to renew session via Azure OAuth refresh token.")
         request_token__data = {
             "client_id": THERMIA_AZURE_AUTH_CLIENT_ID_AND_SCOPE,
             "redirect_uri": THERMIA_AZURE_AUTH_REDIRECT_URI,
@@ -433,25 +440,27 @@ class ThermiaAPI:
             "grant_type": "refresh_token",
         }
 
-        request_token = self.__session.post(
-            AZURE_AUTH_GET_TOKEN_URL,
-            headers=azure_auth_request_headers,
-            data=request_token__data,
-        )
+        try:
+            request_token = self.__session.post(
+                AZURE_AUTH_GET_TOKEN_URL,
+                headers=azure_auth_request_headers,
+                data=request_token__data,
+                timeout=GLOBAL_TIMEOUT
+            )
+        except requests.RequestException as e:
+            _LOGGER.error("Timeout during refresh token authentication request: %s", e)
+            return None
 
         if request_token.status_code != 200:
             self.__refresh_token = None
             self.__refresh_token_valid_to = None
-            _LOGGER.warning(
-                "Refresh token renewal failed. Status: %s, Response: %s",
-                request_token.status_code, request_token.text
-            )
+            _LOGGER.warning("Refresh token renewal rejected by Azure. Status: %s", request_token.status_code)
             return None
 
         return request_token.text
 
     def __authenticate(self) -> bool:
-        # Check if we have an active refresh token available to avoid full login sequence
+        # Decoupled optimization: Evaluate if we have a valid refresh token state ready to be used
         refresh_azure_token = bool(self.__refresh_token and self.__refresh_token_valid_to and (
             self.__refresh_token_valid_to > datetime.now().timestamp()
         ))
@@ -461,8 +470,8 @@ class ThermiaAPI:
         if refresh_azure_token:  
             request_token_text = self.__authenticate_refresh_token()
 
-        if request_token_text is None:  # Full credential scrape authentication sequence
-            _LOGGER.info("Performing full credential authentication flow.")
+        if request_token_text is None:  
+            _LOGGER.info("Performing full web-credential scratch login cycle.")
             self.__token = None
             self.__token_valid_to = None
 
@@ -473,15 +482,15 @@ class ThermiaAPI:
                 "redirect_uri": THERMIA_AZURE_AUTH_REDIRECT_URI,
                 "response_type": "code",
                 "code_challenge": str(
-                    utils.base64_url_encode(
-                        hashlib.sha256(code_challenge.encode("utf-8")).digest()
-                    ),
-                    "utf-8",
+                    utils.base64_url_encode(hashlib.sha256(code_challenge.encode("utf-8")).digest()), "utf-8"
                 ),
                 "code_challenge_method": "S256",
             }
 
-            request_auth = self.__session.get(AZURE_AUTH_AUTHORIZE_URL, data=request_auth__data)
+            try:
+                request_auth = self.__session.get(AZURE_AUTH_AUTHORIZE_URL, data=request_auth__data, timeout=GLOBAL_TIMEOUT)
+            except requests.RequestException as e:
+                raise NetworkException("Timeout hitting Azure Authorize endpoint", e)
 
             state_code = ""
             csrf_token = ""
@@ -495,10 +504,10 @@ class ThermiaAPI:
                         state_code = str(settings["transId"]).split("=")[1]
                         csrf_token = settings["csrf"]
                     except Exception as e:
-                        _LOGGER.error("Error parsing authorization API settings. Response: %s", request_auth.text, exc_info=True)
+                        _LOGGER.error("Error parsing authorization API settings.", exc_info=True)
                         raise NetworkException(f"Error parsing authorization API settings. {request_auth.text}", e)
             else:
-                _LOGGER.error("Error fetching authorization API. Status: %s, Response: %s", request_auth.status_code, request_auth.text)
+                _LOGGER.error("Error fetching authorization API. Status: %s", request_auth.status_code)
                 raise NetworkException("Error fetching authorization API.", request_auth.reason)
 
             request_self_asserted__data = {
@@ -511,16 +520,20 @@ class ThermiaAPI:
                 "p": "B2C_1A_SignUpOrSigninOnline",
             }
 
-            request_self_asserted = self.__session.post(
-                AZURE_SELF_ASSERTED_URL,
-                cookies=request_auth.cookies,
-                data=request_self_asserted__data,
-                headers={**azure_auth_request_headers, "X-Csrf-Token": csrf_token},
-                params=request_self_asserted__query_params,
-            )
+            try:
+                request_self_asserted = self.__session.post(
+                    AZURE_SELF_ASSERTED_URL,
+                    cookies=request_auth.cookies,
+                    data=request_self_asserted__data,
+                    headers={**azure_auth_request_headers, "X-Csrf-Token": csrf_token},
+                    params=request_self_asserted__query_params,
+                    timeout=GLOBAL_TIMEOUT
+                )
+            except requests.RequestException as e:
+                raise NetworkException("Timeout hitting Azure Self Asserted login endpoint", e)
 
             if request_self_asserted.status_code != 200 or '{"status":"400"' in request_self_asserted.text:
-                _LOGGER.error("Error in API authentication. Wrong credentials. Response: %s", request_self_asserted.text)
+                _LOGGER.error("Error in API authentication. Wrong credentials.")
                 raise NetworkException("Error in API authentication. Wrong credentials", request_self_asserted.text)
 
             request_confirmed__cookies = request_self_asserted.cookies
@@ -535,11 +548,15 @@ class ThermiaAPI:
                 "p": "B2C_1A_SignUpOrSigninOnline",
             }
 
-            request_confirmed = self.__session.get(
-                AZURE_AUTH_CONFIRM_URL,
-                cookies=request_confirmed__cookies,
-                params=request_confirmed__params,
-            )
+            try:
+                request_confirmed = self.__session.get(
+                    AZURE_AUTH_CONFIRM_URL,
+                    cookies=request_confirmed__cookies,
+                    params=request_confirmed__params,
+                    timeout=GLOBAL_TIMEOUT
+                )
+            except requests.RequestException as e:
+                raise NetworkException("Timeout hitting Azure Confirmation redirect", e)
 
             request_token__data = {
                 "client_id": THERMIA_AZURE_AUTH_CLIENT_ID_AND_SCOPE,
@@ -550,14 +567,18 @@ class ThermiaAPI:
                 "grant_type": "authorization_code",
             }
 
-            request_token = self.__session.post(
-                AZURE_AUTH_GET_TOKEN_URL,
-                headers=azure_auth_request_headers,
-                data=request_token__data,
-            )
+            try:
+                request_token = self.__session.post(
+                    AZURE_AUTH_GET_TOKEN_URL,
+                    headers=azure_auth_request_headers,
+                    data=request_token__data,
+                    timeout=GLOBAL_TIMEOUT
+                )
+            except requests.RequestException as e:
+                raise NetworkException("Timeout requesting JWT bearer access token", e)
 
             if request_token.status_code != 200:
-                error_text = f"Authentication request failed. Status: {request_token.status_code}, Response: {request_token.text}"
+                error_text = f"Authentication request failed. Status: {request_token.status_code}"
                 _LOGGER.error(error_text)
                 raise AuthenticationException(error_text)
 
@@ -566,29 +587,29 @@ class ThermiaAPI:
         try:
             token_data = json.loads(request_token_text)
         except Exception as e:
-            _LOGGER.error("Error parsing authentication token data. Data: %s", request_token_text, exc_info=True)
-            raise NetworkException(f"Error parsing authentication token data. {request_token_text}", e)
+            raise NetworkException(f"Error parsing token payload string: {request_token_text}", e)
 
         self.__token = token_data["access_token"]
         self.__token_valid_to = token_data["expires_on"]
 
-        # Refresh token tracking window (safe fallback every 6h)
+        # Track refresh threshold safe margin window cleanly (6h expiration fallback logic)
         self.__refresh_token_valid_to = (datetime.now() + timedelta(hours=6)).timestamp()
         self.__refresh_token = token_data.get("refresh_token")
 
         self.__default_request_headers["Authorization"] = f"Bearer {self.__token}"
-        _LOGGER.info("Authentication was successful, token set.")
+        _LOGGER.info("Authentication cycle resolved successfully.")
         return True
 
     def __check_token_validity(self):
-        # Adjusted with a 60-second execution safety padding window
+        # 60 second clock margin to safeguard running commands mid-transit cleanly
         now_with_padding = datetime.now().timestamp() + 60
         
+        # Split logic: Check if access token is dead OR refresh token itself has completely run out
         if (
             self.__token_valid_to is None
             or self.__token_valid_to < now_with_padding
             or self.__refresh_token_valid_to is None
             or self.__refresh_token_valid_to < now_with_padding
         ):
-            _LOGGER.info("Token approaching expiration or missing. Triggering validation cycle.")
+            _LOGGER.info("API Session token expiration threshold reached. Re-validating identity tokens.")
             self.authenticated = self.__authenticate()
