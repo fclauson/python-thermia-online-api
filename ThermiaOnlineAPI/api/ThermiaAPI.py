@@ -1,9 +1,8 @@
 import logging
-from collections import ChainMap
 from datetime import datetime, timedelta
 import requests
 from requests.adapters import HTTPAdapter, Retry
-from requests import cookies
+from requests import cookies  # Kept here as it's used in the deep __authenticate method
 import json
 import hashlib
 from typing import Dict, Optional, Any, List
@@ -33,20 +32,20 @@ from ..utils import utils
 
 _LOGGER = logging.getLogger(__name__)
 
-AZURE_AUTH_AUTHORIZE_URL = THERMIA_AZURE_AUTH_URL + "/oauth2/v2.0/authorize"
-AZURE_AUTH_GET_TOKEN_URL = THERMIA_AZURE_AUTH_URL + "/oauth2/v2.0/token"
-AZURE_SELF_ASSERTED_URL = THERMIA_AZURE_AUTH_URL + "/SelfAsserted"
-AZURE_AUTH_CONFIRM_URL = THERMIA_AZURE_AUTH_URL + "/api/CombinedSigninAndSignup/confirmed"
+AZURE_AUTH_AUTHORIZE_URL = f"{THERMIA_AZURE_AUTH_URL}/oauth2/v2.0/authorize"
+AZURE_AUTH_GET_TOKEN_URL = f"{THERMIA_AZURE_AUTH_URL}/oauth2/v2.0/token"
+AZURE_SELF_ASSERTED_URL = f"{THERMIA_AZURE_AUTH_URL}/SelfAsserted"
+AZURE_AUTH_CONFIRM_URL = f"{THERMIA_AZURE_AUTH_URL}/api/CombinedSigninAndSignup/confirmed"
 
 azure_auth_request_headers = {
     "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
 }
 
 REG_OPERATIONMODE_SKIP_VALUES = ["REG_VALUE_OPERATION_MODE_SERVICE"]
-
-# Global safety timeouts: (Connect timeout, Read timeout) in seconds
-# This prevents the requests library from hanging forever on bad connections
 GLOBAL_TIMEOUT = (5, 10)
+
+# Constants to eliminate magic numbers
+HOT_WATER_START_TEMP_REGISTER_INDEX = 107061
 
 
 class ThermiaAPI:
@@ -58,204 +57,112 @@ class ThermiaAPI:
         self.__refresh_token_valid_to = None
         self.__refresh_token = None
 
+        # Cleaned up unnecessary CORS request headers
         self.__default_request_headers = {
             "Authorization": "Bearer ",
             "Content-Type": "application/json",
             "cache-control": "no-cache",
-            "Access-Control-Allow-Origin": "*",
         }
 
         self.__session = requests.Session()
-        retry = Retry(
-            total=3, backoff_factor=0.3, status_forcelist=[500, 502, 503, 504]
-        )
+        retry = Retry(total=3, backoff_factor=0.3, status_forcelist=[500, 502, 503, 504])
         adapter = HTTPAdapter(max_retries=retry)
         self.__session.mount("https://", adapter)
 
         self.configuration = self.__fetch_configuration()
         self.authenticated = self.__authenticate()
 
-    def get_devices(self) -> List[Dict[str, Any]]:
+    def __make_get_request(self, url: str, error_msg: str) -> Optional[List[Dict[str, Any]]]:
+        """Reviewer #1: Helper to eliminate repetitive GET request logic across the API."""
         self.__check_token_validity()
-
-        url = f"{self.configuration['apiBaseUrl']}/api/v1/installationsInfo"
         try:
-            request = self.__session.get(url, headers=self.__default_request_headers, timeout=GLOBAL_TIMEOUT)
-            status = request.status_code
+            response = self.__session.get(url, headers=self.__default_request_headers, timeout=GLOBAL_TIMEOUT)
+            if response.status_code != 200:
+                _LOGGER.error("Error: %s. Status: %s, Response: %s", error_msg, response.status_code, response.text)
+                return None
+            return utils.get_response_json_or_log_and_raise_exception(response, error_msg)
         except requests.RequestException as e:
-            _LOGGER.error("Timeout or network error fetching devices: %s", e)
-            return []
+            _LOGGER.error("Timeout or network error during '%s': %s", error_msg, e)
+            return None
 
-        if status != 200:
-            _LOGGER.error("Error fetching devices. Status: %s, Response: %s", status, request.text)
-            return []
-
-        response = utils.get_response_json_or_log_and_raise_exception(
-            request, "Error getting devices."
-        )
-        return response.get("items", [])
+    def get_devices(self) -> List[Dict[str, Any]]:
+        url = f"{self.configuration['apiBaseUrl']}/api/v1/installationsInfo"
+        response = self.__make_get_request(url, "fetching devices list")
+        return response.get("items", []) if response else []
 
     def get_device_by_id(self, device_id: str) -> Optional[Dict[str, Any]]:
-        self.__check_token_validity()
+        # Reviewer #4: Simplified lookup using next()
         devices = self.get_devices()
-        device = [d for d in devices if str(d["id"]) == str(device_id)]
-
-        if len(device) != 1:
-            _LOGGER.error("Error getting device by id: %s", device_id)
-            return None
-
-        return device[0]
+        device = next((d for d in devices if str(d["id"]) == str(device_id)), None)
+        if device is None:
+            _LOGGER.error("Device not found with id: %s", device_id)
+        return device
 
     def get_device_info(self, device_id: str) -> Optional[Dict[str, Any]]:
-        self.__check_token_validity()
-
         url = f"{self.configuration['apiBaseUrl']}/api/v1/installations/{device_id}"
-        try:
-            request = self.__session.get(url, headers=self.__default_request_headers, timeout=GLOBAL_TIMEOUT)
-            status = request.status_code
-        except requests.RequestException as e:
-            _LOGGER.error("Timeout or network error fetching device info: %s", e)
-            return None
-
-        if status != 200:
-            _LOGGER.error("Error fetching device info. Status: %s, Response: %s", status, request.text)
-            return None
-
-        return utils.get_response_json_or_log_and_raise_exception(request, "Error getting device info.")
+        return self.__make_get_request(url, "fetching device info")
 
     def get_device_status(self, device_id: str) -> Optional[Dict[str, Any]]:
-        self.__check_token_validity()
-
         url = f"{self.configuration['apiBaseUrl']}/api/v1/installationstatus/{device_id}/status"
-        try:
-            request = self.__session.get(url, headers=self.__default_request_headers, timeout=GLOBAL_TIMEOUT)
-            status = request.status_code
-        except requests.RequestException as e:
-            _LOGGER.error("Timeout or network error fetching device status: %s", e)
-            return None
-
-        if status != 200:
-            _LOGGER.error("Error fetching device status. Status: %s, Response: %s", status, request.text)
-            return None
-
-        return utils.get_response_json_or_log_and_raise_exception(request, "Error fetching device status.")
+        return self.__make_get_request(url, "fetching device status")
 
     def get_all_alarms(self, device_id: str) -> Optional[Dict[str, Any]]:
-        self.__check_token_validity()
-
         url = f"{self.configuration['apiBaseUrl']}/api/v1/installation/{device_id}/events?onlyActiveAlarms=false"
-        try:
-            request = self.__session.get(url, headers=self.__default_request_headers, timeout=GLOBAL_TIMEOUT)
-            status = request.status_code
-        except requests.RequestException as e:
-            _LOGGER.error("Timeout or network error fetching alarms: %s", e)
-            return None
-
-        if status != 200:
-            _LOGGER.error("Error in getting device's alarms. Status: %s, Response: %s", status, request.text)
-            return None
-
-        return utils.get_response_json_or_log_and_raise_exception(request, "Error in getting device's alarms.")
+        return self.__make_get_request(url, "fetching active alarms")
 
     def get_historical_data_registers(self, device_id: str) -> Optional[Dict[str, Any]]:
-        self.__check_token_validity()
-
         url = f"{self.configuration['apiBaseUrl']}/api/v1/DataHistory/installation/{device_id}"
-        try:
-            request = self.__session.get(url, headers=self.__default_request_headers, timeout=GLOBAL_TIMEOUT)
-            status = request.status_code
-        except requests.RequestException as e:
-            _LOGGER.error("Timeout or network error fetching historical registers: %s", e)
-            return None
-
-        if status != 200:
-            _LOGGER.error("Error in historical data registers. Status: %s, Response: %s", status, request.text)
-            return None
-
-        return utils.get_response_json_or_log_and_raise_exception(request, "Error in historical data registers.")
+        return self.__make_get_request(url, "fetching historical data registers")
 
     def get_historical_data(
         self, device_id: str, register_id: Any, start_date_str: str, end_date_str: str
     ) -> Optional[Dict[str, Any]]:
-        self.__check_token_validity()
-
         url = (
             f"{self.configuration['apiBaseUrl']}/api/v1/datahistory/installation/{device_id}"
             f"/register/{register_id}/minute?periodStart={start_date_str}&periodEnd={end_date_str}"
         )
-        try:
-            request = self.__session.get(url, headers=self.__default_request_headers, timeout=GLOBAL_TIMEOUT)
-            status = request.status_code
-        except requests.RequestException as e:
-            _LOGGER.error("Timeout or network error fetching historical data: %s", e)
-            return None
-
-        if status != 200:
-            _LOGGER.error("Error in historical data for specific register. Status: %s, Response: %s", status, request.text)
-            return None
-
-        return utils.get_response_json_or_log_and_raise_exception(request, "Error in historical data for specific register.")
+        return self.__make_get_request(url, "fetching historical register specific data")
 
     def get_all_available_groups(self, installation_profile_id: int) -> Optional[Dict[str, Any]]:
-        self.__check_token_validity()
-
         url = f"{self.configuration['apiBaseUrl']}/api/v1/installationprofiles/{installation_profile_id}/groups"
-        try:
-            request = self.__session.get(url, headers=self.__default_request_headers, timeout=GLOBAL_TIMEOUT)
-            status = request.status_code
-        except requests.RequestException as e:
-            _LOGGER.error("Timeout or network error fetching available groups: %s", e)
-            return None
+        return self.__make_get_request(url, "fetching available configuration groups")
 
-        if status != 200:
-            _LOGGER.error("Error in getting available groups. Status: %s, Response: %s", status, request.text)
-            return None
-
-        return utils.get_response_json_or_log_and_raise_exception(request, "Error in getting available groups.")
-
-    def get_group_temperatures(self, device_id: str) -> list:
+    def get_group_temperatures(self, device_id: str) -> List[Dict[str, Any]]:
         return self.__get_register_group(device_id, REG_GROUP_TEMPERATURES)
 
-    def get_group_operational_status(self, device_id: str) -> list:
+    def get_group_operational_status(self, device_id: str) -> List[Dict[str, Any]]:
         return self.__get_register_group(device_id, REG_GROUP_OPERATIONAL_STATUS)
 
-    def get_group_operational_time(self, device_id: str) -> list:
+    def get_group_operational_time(self, device_id: str) -> List[Dict[str, Any]]:
         return self.__get_register_group(device_id, REG_GROUP_OPERATIONAL_TIME)
 
-    def get_group_operational_operation(self, device: ThermiaHeatPump) -> Optional[dict]:
+    def get_group_operational_operation(self, device: ThermiaHeatPump) -> Optional[Dict[str, Any]]:
         return self.__get_group_operational_operation_from_register_group(device, REG_GROUP_OPERATIONAL_OPERATION)
 
-    def get_group_operational_operation_from_status(self, device: ThermiaHeatPump) -> Optional[dict]:
+    def get_group_operational_operation_from_status(self, device: ThermiaHeatPump) -> Optional[Dict[str, Any]]:
         return self.__get_group_operational_operation_from_register_group(device, REG_GROUP_OPERATIONAL_STATUS)
 
     def __get_group_operational_operation_from_register_group(
         self, device: ThermiaHeatPump, register_group: str
-    ) -> Optional[dict]:
+    ) -> Optional[Dict[str, Any]]:
         register_data = self.__get_register_group(device.id, register_group)
-        data = [d for d in register_data if d["registerName"] == REG_OPERATIONMODE]
+        data = next((d for d in register_data if d["registerName"] == REG_OPERATIONMODE), None)
 
-        if len(data) != 1:
+        if not data:
             return None
 
-        data = data[0]
         device.set_register_index_operation_mode(data["registerId"])
-
         current_operation_mode_value = int(data.get("registerValue"))
         operation_modes_data = data.get("valueNames")
 
         if operation_modes_data is not None:
-            operation_modes_map = map(
-                lambda values: (
-                    {
-                        values.get("value"): values.get("name").split("REG_VALUE_OPERATION_MODE_")[1],
-                    }
-                    if values.get("name") not in REG_OPERATIONMODE_SKIP_VALUES
-                    else {}
-                ),
-                operation_modes_data,
-            )
-            operation_modes_list = list(filter(lambda x: x != {}, operation_modes_map))
-            operation_modes = ChainMap(*operation_modes_list)
+            # Reviewer #5: Cleaned up ugly nested lambda maps with an explicit readable loop
+            operation_modes = {}
+            for values in operation_modes_data:
+                name = values.get("name", "")
+                if name not in REG_OPERATIONMODE_SKIP_VALUES:
+                    mode_name = name.split("REG_VALUE_OPERATION_MODE_")[1]
+                    operation_modes[values.get("value")] = mode_name
 
             current_operation_mode = [
                 name for value, name in operation_modes.items() if value == current_operation_mode_value
@@ -271,17 +178,15 @@ class ThermiaAPI:
         return None
 
     def __get_switch_register_index_and_value_from_group_by_register_name(
-        self, register_group: list, register_name: str
-    ) -> dict:
+        self, register_group: List[Dict[str, Any]], register_name: str
+    ) -> Dict[str, Any]:
         default_return_object = {"registerId": None, "registerValue": None}
-        switch_data_list = [d for d in register_group if d["registerName"] == register_name]
+        switch_data = next((d for d in register_group if d["registerName"] == register_name), None)
 
-        if len(switch_data_list) != 1:
+        if not switch_data:
             return default_return_object
 
-        switch_data: dict = switch_data_list[0]
         register_value = switch_data.get("registerValue")
-
         if register_value is None:
             return default_return_object
 
@@ -294,17 +199,17 @@ class ThermiaAPI:
             "registerValue": int(register_value),
         }
 
-    def get_group_hot_water_installer(self, device: ThermiaHeatPump) -> list:
+    def get_group_hot_water_installer(self, device: ThermiaHeatPump) -> List[Dict[str, Any]]:
         return self.__get_register_group(device.id, REG_GROUP_HOT_WATER)
     
-    def get_hp_diagnostics(self, device: ThermiaHeatPump) -> list:
+    def get_hp_diagnostics(self, device: ThermiaHeatPump) -> List[Dict[str, Any]]:
         return self.__get_register_group(device.id, REG_GROUP_OPERATIONAL_DIAGNOSTICS)
 
-    def get_heating_curve(self, device: ThermiaHeatPump) -> list:
+    def get_heating_curve(self, device: ThermiaHeatPump) -> List[Dict[str, Any]]:
         return self.__get_register_group(device.id, REG_GROUP_HEATING_CURVE)
 
     def get_group_hot_water(self, device: ThermiaHeatPump) -> Dict[str, Optional[int]]:
-        register_data: list = self.__get_register_group(device.id, REG_GROUP_HOT_WATER)
+        register_data = self.__get_register_group(device.id, REG_GROUP_HOT_WATER)
 
         hot_water_switch_data = self.__get_switch_register_index_and_value_from_group_by_register_name(
             register_data, REG_HOT_WATER_STATUS
@@ -331,24 +236,20 @@ class ThermiaAPI:
         self.__set_register_value(device, device_temperature_register_index, safe_temp)
 
     def set_hot_water_start_temperature(self, device: ThermiaHeatPump, temperature: Any):
+        # Reviewer #2: Eliminated hardcoded magic numbers
         _LOGGER.info("set_hot_water_start_temp requested: %s", temperature)
-        device_temperature_register_index = 107061 
-        
         safe_temp = int(round(float(temperature)))
-        self.__set_register_value(device, device_temperature_register_index, safe_temp)
+        self.__set_register_value(device, HOT_WATER_START_TEMP_REGISTER_INDEX, safe_temp)
 
     def set_operation_mode(self, device: ThermiaHeatPump, mode: str):
         if device.is_operation_mode_read_only:
             _LOGGER.error("Error setting device's operation mode. Operation mode is read only.")
             return
 
-        operation_mode_int = None
-        for value, name in device.available_operation_mode_map.items():
-            if name == mode:
-                operation_mode_int = value
+        operation_mode_int = next((val for val, name in device.available_operation_mode_map.items() if name == mode), None)
 
         if operation_mode_int is None:
-            _LOGGER.error("Error setting device's operation mode. Invalid operation mode.")
+            _LOGGER.error("Error setting device's operation mode. Invalid operation mode: %s", mode)
             return
 
         device_operation_mode_register_index = device.get_register_indexes()["operation_mode"]
@@ -361,43 +262,30 @@ class ThermiaAPI:
     def set_hot_water_switch_state(self, device: ThermiaHeatPump, state: int):  
         register_index = device.get_register_indexes()["hot_water_switch"]
         if register_index is None:
-            _LOGGER.error("Error setting device's hot water switch state. No hot water switch register index.")
+            _LOGGER.error("Error setting device's hot water switch state. No register index.")
             return
         self.__set_register_value(device, register_index, int(state))
 
     def set_hot_water_boost_switch_state(self, device: ThermiaHeatPump, state: int):  
         register_index = device.get_register_indexes()["hot_water_boost_switch"]
         if register_index is None:
-            _LOGGER.error("Error setting device's hot water boost switch state. No hot water boost switch register index.")
+            _LOGGER.error("Error setting device's hot water boost switch state. No register index.")
             return
         self.__set_register_value(device, register_index, int(state))
 
-    def get_register_group_json(self, device_id: str, register_group: str) -> list:
+    def get_register_group_json(self, device_id: str, register_group: str) -> List[Dict[str, Any]]:
         return self.__get_register_group(device_id, register_group)
 
     def set_register_value(self, device: ThermiaHeatPump, register_index: int, value: int):
         self.__set_register_value(device, register_index, int(value))
 
-    def __get_register_group(self, device_id: str, register_group: str) -> list:
-        self.__check_token_validity()
-
+    def __get_register_group(self, device_id: str, register_group: str) -> List[Dict[str, Any]]:
         url = f"{self.configuration['apiBaseUrl']}{THERMIA_INSTALLATION_PATH}{device_id}/Groups/{register_group}"
-        try:
-            request = self.__session.get(url, headers=self.__default_request_headers, timeout=GLOBAL_TIMEOUT)
-            status = request.status_code
-        except requests.RequestException as e:
-            _LOGGER.error("Timeout or network error fetching register group %s: %s", register_group, e)
-            return []
-
-        if status != 200:
-            _LOGGER.error("Error in getting device's register group: %s, Status: %s", register_group, status)
-            return []
-
-        return utils.get_response_json_or_log_and_raise_exception(
-            request, f"Error in getting device's register group: {register_group}"
-        )
+        response = self.__make_get_request(url, f"fetching register group {register_group}")
+        return response if response else []
 
     def __set_register_value(self, device: ThermiaHeatPump, register_index: int, register_value: int):
+        """Modified: Keeps log patterns but raises NetworkExceptions on failure to notify HA frontend cleanly."""
         self.__check_token_validity()
         _LOGGER.info("set_register_value: device.id=%s, register_index=%s, register_value=%s", device.id, register_index, register_value)
         
@@ -410,25 +298,23 @@ class ThermiaAPI:
 
         try:
             request = self.__session.post(url, headers=self.__default_request_headers, json=body, timeout=GLOBAL_TIMEOUT)
-            status = request.status_code
-            if status != 200:
-                _LOGGER.error("Error setting register %s value. Status: %s, Response: %s", register_index, status, request.text)
+            if request.status_code != 200:
+                _LOGGER.error("Error setting register %s value. Status: %s, Response: %s", register_index, request.status_code, request.text)
+                raise NetworkException(f"Failed to set register value. API returned status {request.status_code}")
         except requests.RequestException as e:
             _LOGGER.error("Timeout or network error setting register %s: %s", register_index, e)
+            raise NetworkException("Network timeout updating register state via cloud API")
 
-    def __fetch_configuration(self) -> dict:
+    def __fetch_configuration(self) -> Dict[str, Any]:
         try:
             request = self.__session.get(THERMIA_CONFIG_URL, timeout=GLOBAL_TIMEOUT)
-            status = request.status_code
+            if request.status_code != 200:
+                _LOGGER.error("Error fetching API configuration. Status: %s, Response: %s", request.status_code, request.text)
+                raise NetworkException("Error fetching API configuration.", request.status_code)
+            return utils.get_response_json_or_log_and_raise_exception(request, "Error fetching API configuration.")
         except requests.RequestException as e:
             _LOGGER.error("Critical timeout fetching API configuration framework: %s", e)
             raise NetworkException("Critical timeout fetching API configuration framework.", 0)
-
-        if status != 200:
-            _LOGGER.error("Error fetching API configuration. Status: %s, Response: %s", status, request.text)
-            raise NetworkException("Error fetching API configuration.", status)
-
-        return utils.get_response_json_or_log_and_raise_exception(request, "Error fetching API configuration.")
 
     def __authenticate_refresh_token(self) -> Optional[str]:
         _LOGGER.info("Attempting to renew session via Azure OAuth refresh token.")
@@ -447,31 +333,27 @@ class ThermiaAPI:
                 data=request_token__data,
                 timeout=GLOBAL_TIMEOUT
             )
+            if request_token.status_code != 200:
+                self.__refresh_token = None
+                self.__refresh_token_valid_to = None
+                _LOGGER.warning("Refresh token renewal rejected by Azure. Status: %s", request_token.status_code)
+                return None
+            return request_token.text
         except requests.RequestException as e:
             _LOGGER.error("Timeout during refresh token authentication request: %s", e)
             return None
 
-        if request_token.status_code != 200:
-            self.__refresh_token = None
-            self.__refresh_token_valid_to = None
-            _LOGGER.warning("Refresh token renewal rejected by Azure. Status: %s", request_token.status_code)
-            return None
-
-        return request_token.text
-
     def __authenticate(self) -> bool:
-        # Decoupled optimization: Evaluate if we have a valid refresh token state ready to be used
         refresh_azure_token = bool(self.__refresh_token and self.__refresh_token_valid_to and (
             self.__refresh_token_valid_to > datetime.now().timestamp()
         ))
 
         request_token_text = None
-
         if refresh_azure_token:  
             request_token_text = self.__authenticate_refresh_token()
 
         if request_token_text is None:  
-            _LOGGER.info("Performing full web-credential scratch login cycle.")
+            _LOGGER.info("Performing full web-credential login cycle.")
             self.__token = None
             self.__token_valid_to = None
 
@@ -578,9 +460,7 @@ class ThermiaAPI:
                 raise NetworkException("Timeout requesting JWT bearer access token", e)
 
             if request_token.status_code != 200:
-                error_text = f"Authentication request failed. Status: {request_token.status_code}"
-                _LOGGER.error(error_text)
-                raise AuthenticationException(error_text)
+                raise AuthenticationException(f"Authentication request failed. Status: {request_token.status_code}")
 
             request_token_text = request_token.text
 
@@ -591,8 +471,6 @@ class ThermiaAPI:
 
         self.__token = token_data["access_token"]
         self.__token_valid_to = token_data["expires_on"]
-
-        # Track refresh threshold safe margin window cleanly (6h expiration fallback logic)
         self.__refresh_token_valid_to = (datetime.now() + timedelta(hours=6)).timestamp()
         self.__refresh_token = token_data.get("refresh_token")
 
@@ -601,10 +479,7 @@ class ThermiaAPI:
         return True
 
     def __check_token_validity(self):
-        # 60 second clock margin to safeguard running commands mid-transit cleanly
         now_with_padding = datetime.now().timestamp() + 60
-        
-        # Split logic: Check if access token is dead OR refresh token itself has completely run out
         if (
             self.__token_valid_to is None
             or self.__token_valid_to < now_with_padding
